@@ -1,0 +1,24 @@
+name: Submit a FireTube package
+description: Publish a mod or automation to the FireTube community catalog.
+title: "[Package] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for making something! FireTube fills this form in for you when you press **Publish online**.
+        A robot runs the safety checks as soon as you submit, then a maintainer reviews it.
+  - type: textarea
+    id: package
+    attributes:
+      label: Package JSON
+      description: The contents of your `.firetube.json` file.
+      render: json
+    validations:
+      required: true
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Rules
+      options:
+        - label: I made this (or have the right to share it), and it doesn't hide ads, fake engagement, or collect data.
+          required: true
