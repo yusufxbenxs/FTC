@@ -18,17 +18,25 @@ Flyer is **not** a separate app or a second launcher. It is a subsystem of the l
 
 ## Install
 
-A ready-to-install build is at **`dist/FlyerLauncher-1.0.0.apk`**. It is a minified release build, signed with a local debug key.
+Download **`dist/FlyerLauncher-1.0.1.apk`**. It needs Android 8.0 (API 26) or newer, and you have two options:
 
-1. Copy the APK to the phone and open it, or run `adb install dist/FlyerLauncher-1.0.0.apk`.
-   Android 8.0 (API 26) or newer is required.
-2. Make it the default home app, using any one of these:
+| File | Use it when |
+|---|---|
+| `FlyerLauncher-1.0.1.apk` | **Recommended.** The standard build: no accessibility service and no "see all apps" permission, so Play Protect doesn't block it. |
+| `FlyerLauncher-1.0.1-full.apk` | You also want the *Lock screen*, *Recent apps* and *Screenshot* gestures. These need an accessibility helper, and Play Protect blocks most sideloaded apps that include one. |
+
+1. Open the APK on the phone, or run `adb install dist/FlyerLauncher-1.0.1.apk`.
+2. **If Play Protect shows a warning** (normal for any app that isn't from the Play Store):
+   * Tap **More details → Install anyway**.
+   * If the dialog has no "Install anyway" button: open the **Play Store → your profile picture → Play Protect → ⚙ settings**, turn off **Scan apps with Play Protect**, install the APK, then turn scanning back on.
+   * If your browser or file manager isn't allowed to install apps, Android shows a prompt. Allow **Install unknown apps** for it.
+3. Make it the default home app, using any one of these:
    * Press the **Home** button. If Android asks, choose **Flyer Launcher** and then **Always**.
    * Open **Settings → Apps → Default apps → Home app → Flyer Launcher**. The exact wording varies by manufacturer.
    * Open Flyer Launcher from your current launcher (it has a normal app icon), then tap **Flyer → Set as default** on the dashboard. On Android 10+ this uses the system "Home app" role dialog.
-3. Optional: to use the *Lock screen*, *Recent apps* and *Screenshot* gestures, enable **Settings → Accessibility → Flyer Launcher gestures**. Flyer → Gestures has a shortcut to this setting.
+4. Full build only: enable **Settings → Accessibility → Flyer Launcher gestures**. On Android 13+ you may first need **App info → ⋮ → Allow restricted settings**.
 
-If you later install a build you compiled yourself, it is signed with a different key, so uninstall this one first.
+The standard and full builds are signed with the same key, so you can switch between them without uninstalling. A build you compile yourself with a different key needs an uninstall first, so export your setup in **Flyer → Backup & Restore** beforehand.
 
 ## Opening Flyer
 
@@ -49,12 +57,15 @@ Requirements: JDK 17+ and Android SDK platform 36 (build-tools 35).
 ```bash
 cd flyer-launcher
 echo "sdk.dir=/path/to/Android/sdk" > local.properties
-./gradlew assembleRelease        # app/build/outputs/apk/release/app-release.apk (R8-minified, ~2 MB)
-./gradlew assembleDebug          # app/build/outputs/apk/debug/app-debug.apk (package com.flyer.launcher.debug)
-./gradlew testDebugUnitTest      # 41 tests: engines + Robolectric UI tests (screenshots → app/build/flyer-screenshots)
+./gradlew assembleStandardRelease   # app/build/outputs/apk/standard/release/ (R8-minified, ~2 MB)
+./gradlew assembleFullRelease       # same, plus the optional accessibility gesture helper
+./gradlew assembleStandardDebug     # debug build (package com.flyer.launcher.debug)
+./gradlew testStandardDebugUnitTest # 41 tests: engines + Robolectric UI tests (screenshots → app/build/flyer-screenshots)
 ```
 
-The release build type is signed with the debug signing config so it installs directly. Replace `signingConfig` in `app/build.gradle.kts` before distributing.
+Release builds are signed with the key described in `keystore.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; git-ignored). Without that file they fall back to your local debug key.
+
+Build flavors: `standard` (default) ships no accessibility service. `full` adds `src/full`, the optional gesture helper, and `BuildConfig.GESTURE_HELPER` tells the UI which build it is running in.
 
 Toolchain: Kotlin 2.2, Jetpack Compose (BOM 2025.10), Material 3, AGP 8.13, Gradle 8.14, kotlinx.serialization, DataStore, coroutines/Flow, AppWidgetHost/AppWidgetManager and LauncherApps. Room is not used: the persisted state is a single versioned document, which DataStore handles atomically.
 
@@ -130,8 +141,9 @@ Flyer has full authority over what the launcher owns, and only that. It requests
 
 | Wanted | Platform reality | What Flyer does |
 |---|---|---|
-| Swipe down for notifications or quick settings | No public API | Calls `StatusBarManager.expand*Panel` (the long-standing launcher approach, using the normal `EXPAND_STATUS_BAR` permission). If that is unavailable, falls back to the optional accessibility helper |
-| Lock screen, recents, screenshot | Only accessibility services can trigger these | Optional "Flyer Launcher gestures" helper that performs only these global actions and reads no content |
+| Swipe down for notifications or quick settings | No public API | Calls `StatusBarManager.expand*Panel` (the long-standing launcher approach, using the normal `EXPAND_STATUS_BAR` permission). If that is unavailable, the full build falls back to the accessibility helper |
+| Lock screen, recents, screenshot | Only accessibility services can trigger these, and Play Protect blocks sideloaded apps that include one | Available only in the **full** build, through the optional "Flyer Launcher gestures" helper. It performs only these global actions and reads no content. The standard build hides these actions |
+| Seeing every installed app | `QUERY_ALL_PACKAGES` is a restricted permission | Not requested. Manifest `<queries>` for launcher activities, icon packs and widget providers cover everything a launcher needs |
 | Blur behind dock or panels with the system wallpaper | Apps can't read or blur part of the system wallpaper | Window blur-behind for drawer and folders (Android 12+, when the device allows cross-window blur). Dock backdrop blur when the background is drawn by the launcher (Home Screen → Background) |
 | Showing your real wallpaper in Flyer previews | Reading the wallpaper needs privileged access on modern Android | Uses the real image when allowed, otherwise a gradient built from the wallpaper's own colors |
 | App shortcuts and "Add to home screen" pins | Only available to the **default** home app | Works automatically once Flyer Launcher is your default home app |

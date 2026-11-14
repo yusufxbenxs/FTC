@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -13,9 +15,41 @@ android {
         applicationId = "com.flyer.launcher"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         vectorDrawables { useSupportLibrary = true }
+    }
+
+    // Release signing: put storeFile/storePassword/keyAlias/keyPassword in flyer-launcher/keystore.properties
+    // (git-ignored). Without it, release builds fall back to the local debug key.
+    val keystoreProps = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { f ->
+        Properties().apply { f.inputStream().use { load(it) } }
+    }
+    signingConfigs {
+        if (keystoreProps != null) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
+    // "standard" (default): no accessibility service, so sideloading isn't blocked by Play Protect.
+    // "full": adds the optional accessibility helper for lock-screen / recents / screenshot gestures.
+    flavorDimensions += "helper"
+    productFlavors {
+        create("standard") {
+            dimension = "helper"
+            isDefault = true
+            buildConfigField("boolean", "GESTURE_HELPER", "false")
+        }
+        create("full") {
+            dimension = "helper"
+            versionNameSuffix = "-full"
+            buildConfigField("boolean", "GESTURE_HELPER", "true")
+        }
     }
 
     buildTypes {
@@ -23,9 +57,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the local debug key so the optimized build is directly installable.
-            // Replace with your own signingConfig before distributing.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"

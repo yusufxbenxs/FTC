@@ -8,11 +8,11 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
-import android.view.accessibility.AccessibilityEvent
 import com.flyer.launcher.core.config.ActionType
 import com.flyer.launcher.core.config.FlyerConfig
 import com.flyer.launcher.core.config.GestureAction
 import com.flyer.launcher.core.config.GestureType
+import com.flyer.launcher.BuildConfig
 
 /** Human readable metadata for gestures and actions (used by Flyer's gesture editor). */
 object GestureCatalog {
@@ -53,6 +53,9 @@ object GestureCatalog {
     /** Actions that need the optional accessibility helper because launchers cannot do them directly. */
     fun needsAccessibility(a: ActionType) = a in setOf(ActionType.LOCK_SCREEN, ActionType.RECENT_APPS, ActionType.SCREENSHOT)
 
+    /** False for helper-only actions in builds that don't include the helper. */
+    fun availableInBuild(a: ActionType) = !needsAccessibility(a) || GestureHelperBridge.includedInBuild
+
     fun minSdk(a: ActionType) = when (a) {
         ActionType.LOCK_SCREEN, ActionType.SCREENSHOT -> Build.VERSION_CODES.P
         else -> Build.VERSION_CODES.O
@@ -73,11 +76,11 @@ class GestureEngine(private val context: Context) {
     fun performSystemAction(type: ActionType): Result<Unit> = when (type) {
         ActionType.EXPAND_NOTIFICATIONS -> {
             if (expandStatusBar("expandNotificationsPanel")) Result.success(Unit)
-            else accessibility(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
+            else accessibility(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS, "Opening notifications isn't supported on this device")
         }
         ActionType.QUICK_SETTINGS -> {
             if (expandStatusBar("expandSettingsPanel")) Result.success(Unit)
-            else accessibility(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
+            else accessibility(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS, "Opening quick settings isn't supported on this device")
         }
         ActionType.LOCK_SCREEN -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
             accessibility(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) else Result.failure(UnsupportedOperationException("Requires Android 9"))
@@ -102,17 +105,22 @@ class GestureEngine(private val context: Context) {
         false
     }
 
-    private fun accessibility(action: Int): Result<Unit> {
-        val service = FlyerAccessibilityService.instance
-            ?: return Result.failure(AccessibilityRequired())
-        return if (service.performGlobalAction(action)) Result.success(Unit)
+    private fun accessibility(action: Int, unavailableMessage: String = HELPER_MISSING): Result<Unit> {
+        if (!GestureHelperBridge.includedInBuild) return Result.failure(UnsupportedOperationException(unavailableMessage))
+        val perform = GestureHelperBridge.performGlobalAction ?: return Result.failure(AccessibilityRequired())
+        return if (perform(action)) Result.success(Unit)
         else Result.failure(UnsupportedOperationException("The system refused the action"))
     }
 
     fun isAccessibilityEnabled(): Boolean {
+        if (!GestureHelperBridge.includedInBuild) return false
         val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-        val me = ComponentName(context, FlyerAccessibilityService::class.java).flattenToString()
+        val me = ComponentName(context.packageName, GestureHelperBridge.SERVICE_CLASS).flattenToString()
         return enabled.split(':').any { it.equals(me, ignoreCase = true) }
+    }
+
+    private companion object {
+        const val HELPER_MISSING = "Lock screen, recents and screenshot gestures need the \"full\" build of Flyer Launcher"
     }
 
     fun accessibilitySettingsIntent(): Intent =
@@ -122,30 +130,16 @@ class GestureEngine(private val context: Context) {
 class AccessibilityRequired : Exception("Enable \"Flyer Launcher gestures\" in Accessibility settings to use this action")
 
 /**
- * Optional helper enabled by the user. It only performs global actions on request from the launcher
- * and ignores every accessibility event (it is restricted to the launcher's own package).
+ * Connection to the optional accessibility helper. The helper itself only exists in the "full"
+ * build flavor (see src/full); the default "standard" build ships without any accessibility
+ * service so sideloading isn't blocked by Play Protect.
  */
-class FlyerAccessibilityService : AccessibilityService() {
-    override fun onServiceConnected() {
-        instance = this
-    }
+object GestureHelperBridge {
+    const val SERVICE_CLASS = "com.flyer.launcher.core.gestures.FlyerAccessibilityService"
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
-    override fun onInterrupt() = Unit
+    /** Set by the helper while it is connected. */
+    @Volatile
+    var performGlobalAction: ((Int) -> Boolean)? = null
 
-    override fun onUnbind(intent: Intent?): Boolean {
-        instance = null
-        return super.onUnbind(intent)
-    }
-
-    override fun onDestroy() {
-        instance = null
-        super.onDestroy()
-    }
-
-    companion object {
-        @Volatile
-        var instance: FlyerAccessibilityService? = null
-            private set
-    }
+    val includedInBuild: Boolean get() = BuildConfig.GESTURE_HELPER
 }

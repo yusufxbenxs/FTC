@@ -455,10 +455,12 @@ private fun AdvancedSection(session: FlyerSession, core: LauncherCore) {
             if (isDefault) "Flyer Launcher is your default home app" else "Make Flyer Launcher your home app",
             "Needed for the home button, app shortcuts and pinned shortcuts.",
         ) { if (!isDefault) Button(onClick = { platform.requestDefaultLauncher() }) { Text("Set default") } }
-        InfoRow(
-            if (accessibility) "Gesture helper enabled" else "Gesture helper (optional)",
-            "Android only lets an accessibility service lock the screen, open recents or take screenshots. Flyer's helper does nothing else and reads no screen content.",
-        ) { OutlinedButton(onClick = { platform.openAccessibilitySettings() }) { Text(if (accessibility) "Manage" else "Enable") } }
+        if (com.flyer.launcher.core.gestures.GestureHelperBridge.includedInBuild) {
+            InfoRow(
+                if (accessibility) "Gesture helper enabled" else "Gesture helper (optional)",
+                "Android only lets an accessibility service lock the screen, open recents or take screenshots. Flyer's helper does nothing else and reads no screen content.",
+            ) { OutlinedButton(onClick = { platform.openAccessibilitySettings() }) { Text(if (accessibility) "Manage" else "Enable") } }
+        }
     }
 
     SectionHeader("Built-in apps")

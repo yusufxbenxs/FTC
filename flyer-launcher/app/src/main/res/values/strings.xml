@@ -2,7 +2,5 @@
 <resources>
     <string name="app_name">Flyer Launcher</string>
     <string name="flyer_name">Flyer</string>
-    <string name="accessibility_service_label">Flyer Launcher gestures</string>
-    <string name="accessibility_service_description">Optional. Lets Flyer Launcher gestures lock the screen, open recent apps, quick settings, notifications or take a screenshot. The service does not read or collect any screen content or input.</string>
     <string name="pin_add_title">Add to home screen</string>
 </resources>

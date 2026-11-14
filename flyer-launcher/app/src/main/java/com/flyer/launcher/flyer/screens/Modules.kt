@@ -55,6 +55,7 @@ import com.flyer.launcher.core.config.ActionType
 import com.flyer.launcher.core.config.GestureAction
 import com.flyer.launcher.core.config.GestureType
 import com.flyer.launcher.core.gestures.GestureCatalog
+import com.flyer.launcher.core.gestures.GestureHelperBridge
 import com.flyer.launcher.core.persistence.BackupKind
 import com.flyer.launcher.core.persistence.DocumentCodec
 import com.flyer.launcher.core.persistence.InvalidBackupException
@@ -89,15 +90,20 @@ fun GestureEditor(session: FlyerSession, apps: List<AppEntry>) {
         GestureType.entries.forEach { g ->
             val action = bindings[g] ?: GestureAction()
             val target = if (action.type == ActionType.LAUNCH_APP) apps.firstOrNull { it.key == action.target }?.label?.let { " · $it" }.orEmpty() else ""
-            val warn = GestureCatalog.needsAccessibility(action.type) && !helperOn
+            val unavailable = !GestureCatalog.availableInBuild(action.type)
+            val warn = unavailable || (GestureCatalog.needsAccessibility(action.type) && !helperOn)
             InfoRow(
                 GestureCatalog.title(g),
-                GestureCatalog.title(action.type) + target + if (warn) " · needs the gesture helper" else "",
+                GestureCatalog.title(action.type) + target + when {
+                    unavailable -> " · not available in this build"
+                    warn -> " · needs the gesture helper"
+                    else -> ""
+                },
                 onClick = { editing = g },
             ) { if (warn) Icon(Icons.Outlined.Warning, null, tint = MaterialTheme.colorScheme.tertiary) }
         }
     }
-    if (!helperOn) {
+    if (GestureHelperBridge.includedInBuild && !helperOn) {
         FlyerCard(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             InfoRow(
                 "Lock screen, recents & screenshots",
@@ -114,7 +120,7 @@ fun GestureEditor(session: FlyerSession, apps: List<AppEntry>) {
             confirmButton = { TextButton(onClick = { editing = null }) { Text("Close") } },
             text = {
                 Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
-                    ActionType.entries.filter { Build.VERSION.SDK_INT >= GestureCatalog.minSdk(it) }.forEach { a ->
+                    ActionType.entries.filter { Build.VERSION.SDK_INT >= GestureCatalog.minSdk(it) && GestureCatalog.availableInBuild(it) }.forEach { a ->
                         Row(
                             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {
                                 editing = null
