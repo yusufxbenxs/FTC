@@ -2,6 +2,8 @@ package com.flyer.launcher.flyer
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Animation
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.Brush
@@ -37,7 +39,9 @@ enum class FlyerCategory(val title: String, val summary: String, val icon: Image
     TYPOGRAPHY("Typography", "Fonts, custom font files, text scale", Icons.Outlined.TextFields),
     DESKTOP("Desktop Mode", "Mouse, keyboard, taskbar, windows", Icons.Outlined.DesktopWindows),
     SEARCH("Search", "Search bar and search sources", Icons.Outlined.Search),
-    THEMES("Themes", "Presets and your saved themes", Icons.Outlined.Brush),
+    THEMES("Themes", "Advanced themes, presets and your saved themes", Icons.Outlined.Brush),
+    MATERIALS("Materials & Effects", "Liquid glass, frosted, neon, clay, animated backgrounds", Icons.Outlined.AutoAwesome),
+    LOCK("Lock", "Lock button, unlock methods, protected apps", Icons.Outlined.Lock),
     PERFORMANCE("Performance", "Effects, caches, low-memory mode", Icons.Outlined.Speed),
     ADVANCED("Advanced", "Built-in apps, behaviour, orientation, debug", Icons.Outlined.Tune),
     BACKUP("Backup & Restore", "Export, import and snapshots", Icons.Outlined.Backup),

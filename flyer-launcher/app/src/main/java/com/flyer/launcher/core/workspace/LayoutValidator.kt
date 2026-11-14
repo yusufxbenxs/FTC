@@ -19,6 +19,8 @@ import com.flyer.launcher.core.model.newId
  */
 object LayoutValidator {
 
+    const val FLYER_KEY = "builtin:flyer"
+
     fun sanitize(layout: HomeLayout, config: FlyerConfig): HomeLayout {
         val seen = HashSet<String>()
         fun uniq(item: WorkspaceItem): WorkspaceItem {
@@ -69,7 +71,11 @@ object LayoutValidator {
                 taskbarPins = layout.desktop.taskbarPins.distinct(),
             ),
             drawerGroups = layout.drawerGroups.map { it.copy(id = it.id.ifBlank { newId() }, apps = it.apps.distinct()) },
+            hiddenApps = layout.hiddenApps.filterNot { WorkspaceEngine.isProtectedKey(it) }.toSet(),
         )
+        // Flyer can't be removed: whatever happened to the layout (import, old backup, edits),
+        // its shortcut is always somewhere on the home screen.
+        if (FLYER_KEY !in WorkspaceEngine.placedAppKeys(result)) result = WorkspaceEngine.addApp(result, FLYER_KEY, config)
         return result
     }
 

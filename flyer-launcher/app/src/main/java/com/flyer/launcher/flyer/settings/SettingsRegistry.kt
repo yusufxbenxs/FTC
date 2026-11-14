@@ -3,6 +3,11 @@ package com.flyer.launcher.flyer.settings
 import android.os.Build
 import com.flyer.launcher.core.config.AppLaunchAnimation
 import com.flyer.launcher.core.config.BackgroundType
+import com.flyer.launcher.core.config.BackgroundConfig
+import com.flyer.launcher.core.config.LockCorner
+import com.flyer.launcher.core.config.LockIcon
+import com.flyer.launcher.core.config.SurfaceMaterial
+import com.flyer.launcher.core.config.UnlockMethod
 import com.flyer.launcher.core.config.CellSizing
 import com.flyer.launcher.core.config.ClockStyle
 import com.flyer.launcher.core.config.ColorValue
@@ -166,10 +171,14 @@ object SettingsRegistry {
             get = { it.home.pageIndicatorAtTop }, set = { c, v -> c.copy(home = c.home.copy(pageIndicatorAtTop = v)) })
 
         section = "Background"
-        choice("bgType", "Background", listOf(BackgroundType.SYSTEM_WALLPAPER to "System wallpaper", BackgroundType.SOLID to "Solid color", BackgroundType.GRADIENT to "Gradient", BackgroundType.IMAGE to "Image"),
+        choice("bgType", "Background", listOf(
+            BackgroundType.SYSTEM_WALLPAPER to "System wallpaper", BackgroundType.SOLID to "Solid color", BackgroundType.GRADIENT to "Gradient",
+            BackgroundType.IMAGE to "Image", BackgroundType.MESH to "Mesh gradient", BackgroundType.AURORA to "Aurora (animated)",
+            BackgroundType.LIQUID to "Liquid (animated)", BackgroundType.PARTICLES to "Particles (animated)", BackgroundType.WAVES to "Waves (animated)",
+        ),
             keywords = listOf("wallpaper", "image", "gradient"), el = setOf(E.BACKGROUND),
             get = { it.home.background.type }, set = { c, v -> c.copy(home = c.home.copy(background = c.home.background.copy(type = v))) })
-        color("bgColor", "Background color", alpha = false, el = setOf(E.BACKGROUND), visible = { it.home.background.type != BackgroundType.SYSTEM_WALLPAPER },
+        color("bgColor", "Background color", alpha = false, el = setOf(E.BACKGROUND), visible = { it.home.background.type in setOf(BackgroundType.SOLID, BackgroundType.GRADIENT, BackgroundType.IMAGE) },
             get = { it.home.background.color }, set = { c, v -> c.copy(home = c.home.copy(background = c.home.background.copy(color = v))) })
         color("bgColor2", "Gradient end color", alpha = false, el = setOf(E.BACKGROUND), visible = { it.home.background.type == BackgroundType.GRADIENT },
             get = { it.home.background.gradientEnd }, set = { c, v -> c.copy(home = c.home.copy(background = c.home.background.copy(gradientEnd = v))) })
@@ -184,6 +193,22 @@ object SettingsRegistry {
             visible = { it.home.background.type == BackgroundType.SYSTEM_WALLPAPER },
             limitation = { _, _ -> "Some wallpapers (and Android versions) ignore scrolling offsets." },
             get = { it.home.background.wallpaperScrolling }, set = { c, v -> c.copy(home = c.home.copy(background = c.home.background.copy(wallpaperScrolling = v))) })
+
+        val animatedBg: (FlyerConfig) -> Boolean = { it.home.background.type.animated || it.home.background.type == BackgroundType.MESH }
+        for (i in 0 until 4) {
+            color("palette$i", if (i == 3) "Base colour" else "Colour ${i + 1}", alpha = false, el = setOf(E.BACKGROUND), visible = animatedBg,
+                get = { it.home.background.palette.getOrElse(i) { BackgroundConfig().palette[i] } },
+                set = { c, v ->
+                    val pal = (c.home.background.palette + BackgroundConfig().palette).take(maxOf(4, c.home.background.palette.size)).toMutableList()
+                    pal[i] = v
+                    c.copy(home = c.home.copy(background = c.home.background.copy(palette = pal)))
+                })
+        }
+        slider("animSpeed", "Animation speed", 0.1f..4f, 0.1f, "×", el = setOf(E.BACKGROUND), visible = { it.home.background.type.animated },
+            get = { it.home.background.animSpeed }, set = { c, v -> c.copy(home = c.home.copy(background = c.home.background.copy(animSpeed = v))) })
+        slider("animDensity", "Amount", 0f..1f, 0.01f, format = ::pct, description = "Blobs, particles or waves.", el = setOf(E.BACKGROUND),
+            visible = { it.home.background.type in setOf(BackgroundType.LIQUID, BackgroundType.PARTICLES, BackgroundType.WAVES) },
+            get = { it.home.background.animDensity }, set = { c, v -> c.copy(home = c.home.copy(background = c.home.background.copy(animDensity = v))) })
 
         section = "System bars"
         toggle("statusBar", "Show status bar", keywords = listOf("immersive", "fullscreen"),
@@ -565,6 +590,8 @@ object SettingsRegistry {
             get = { it.performance.effects }, set = { c, v -> c.copy(performance = c.performance.copy(effects = v)) })
         toggle("blur", "Blur effects", limitation = { _, t -> if (!t.blurSupported) "Blur needs Android 12 or newer." else null },
             get = { it.performance.blurEffects }, set = { c, v -> c.copy(performance = c.performance.copy(blurEffects = v)) })
+        slider("fps", "Animated effects frame rate", 10f..120f, 5f, " fps", "Caps animated backgrounds and materials. Lower saves battery.", keywords = listOf("battery", "fps", "smooth"),
+            get = { it.performance.effectsFps.toFloat() }, set = { c, v -> c.copy(performance = c.performance.copy(effectsFps = v.toInt())) })
         toggle("lowMemory", "Low-memory mode", "Smaller caches, no blur, fewer pages kept in memory.",
             get = { it.performance.lowMemoryMode }, set = { c, v -> c.copy(performance = c.performance.copy(lowMemoryMode = v)) })
 
@@ -601,8 +628,129 @@ object SettingsRegistry {
             get = { it.advanced.showLayoutBounds }, set = { c, v -> c.copy(advanced = c.advanced.copy(showLayoutBounds = v)) })
     }
 
+
+    private val materialOptions = listOf(
+        SurfaceMaterial.FLAT to "Flat", SurfaceMaterial.LIQUID_GLASS to "Liquid glass", SurfaceMaterial.FROSTED to "Frosted",
+        SurfaceMaterial.HOLOGRAPHIC to "Holographic", SurfaceMaterial.NEUMORPHIC to "Soft UI", SurfaceMaterial.CLAY to "Clay",
+        SurfaceMaterial.NEON to "Neon", SurfaceMaterial.OUTLINE to "Outline",
+    )
+    private val glassy: (FlyerConfig) -> Boolean = { it.style.material in setOf(SurfaceMaterial.LIQUID_GLASS, SurfaceMaterial.HOLOGRAPHIC) }
+    private val backdropNote: (FlyerConfig, DeviceTraits) -> String? = { c, _ ->
+        if (c.style.material.usesBackdrop && c.home.background.type == BackgroundType.SYSTEM_WALLPAPER)
+            "Glass can't see the system wallpaper (Android doesn't allow it). It still refracts your icons and widgets; choose a launcher background in Home Screen › Background to see it through the glass."
+        else null
+    }
+
+    val materials = build(FlyerCategory.MATERIALS) {
+        section = "Material"
+        choice("material", "Surface material", materialOptions, keywords = listOf("glass", "liquid", "frosted", "acrylic", "neumorphism", "clay", "neon", "holographic", "style"),
+            limitation = backdropNote, get = { it.style.material }, set = { c, v -> c.copy(style = c.style.copy(material = v)) })
+        toggle("dock", "Use on the dock", get = { it.style.applyToDock }, set = { c, v -> c.copy(style = c.style.copy(applyToDock = v)) })
+        toggle("folders", "Use on folders", get = { it.style.applyToFolders }, set = { c, v -> c.copy(style = c.style.copy(applyToFolders = v)) })
+        toggle("drawer", "Use on the app drawer", get = { it.style.applyToDrawer }, set = { c, v -> c.copy(style = c.style.copy(applyToDrawer = v)) })
+        toggle("menus", "Use on menus and panels", get = { it.style.applyToMenus }, set = { c, v -> c.copy(style = c.style.copy(applyToMenus = v)) })
+        toggle("search", "Use on the search bar", get = { it.style.applyToSearch }, set = { c, v -> c.copy(style = c.style.copy(applyToSearch = v)) })
+        toggle("widgets", "Use on widget containers", get = { it.style.applyToWidgets }, set = { c, v -> c.copy(style = c.style.copy(applyToWidgets = v)) })
+        toggle("taskbar", "Use on the taskbar and start menu", get = { it.style.applyToTaskbar }, set = { c, v -> c.copy(style = c.style.copy(applyToTaskbar = v)) })
+        toggle("lock", "Use on the lock screen", get = { it.style.applyToLock }, set = { c, v -> c.copy(style = c.style.copy(applyToLock = v)) })
+
+        section = "Glass"
+        slider("refraction", "Refraction", 0f..1f, 0.01f, format = ::pct, description = "How strongly the curved edge bends what's behind it.", keywords = listOf("lens", "bend", "distortion"),
+            visible = glassy, limitation = { _, _ -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) "Refraction needs Android 13 or newer." else null },
+            get = { it.style.refraction }, set = { c, v -> c.copy(style = c.style.copy(refraction = v)) })
+        slider("thickness", "Edge thickness", 2f..48f, 1f, "dp", visible = glassy,
+            get = { it.style.thicknessDp.toFloat() }, set = { c, v -> c.copy(style = c.style.copy(thicknessDp = v.toInt())) })
+        slider("chromatic", "Colour fringing", 0f..1f, 0.01f, format = ::pct, keywords = listOf("chromatic aberration", "rainbow"), visible = glassy,
+            limitation = { _, _ -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) "Needs Android 13 or newer." else null },
+            get = { it.style.chromatic }, set = { c, v -> c.copy(style = c.style.copy(chromatic = v)) })
+        slider("frost", "Frost (blur)", R.blur.f(), 1f, "dp", visible = { it.style.material.usesBackdrop }, limitation = blurLimitation,
+            get = { it.style.frostDp.toFloat() }, set = { c, v -> c.copy(style = c.style.copy(frostDp = v.toInt())) })
+        slider("highlight", "Rim highlight", 0f..1f, 0.01f, format = ::pct, keywords = listOf("specular", "shine"), visible = { it.style.material.usesBackdrop },
+            get = { it.style.highlight }, set = { c, v -> c.copy(style = c.style.copy(highlight = v)) })
+        slider("tint", "Tint strength", 0f..1f, 0.01f, format = ::pct, visible = { it.style.material.usesBackdrop },
+            get = { it.style.tintStrength }, set = { c, v -> c.copy(style = c.style.copy(tintStrength = v)) })
+        slider("grain", "Film grain", 0f..1f, 0.01f, format = ::pct, keywords = listOf("noise", "acrylic"), visible = { it.style.material == SurfaceMaterial.FROSTED },
+            get = { it.style.grain }, set = { c, v -> c.copy(style = c.style.copy(grain = v)) })
+        slider("holoSpeed", "Holographic shimmer speed", 0.1f..4f, 0.1f, "×", visible = { it.style.material == SurfaceMaterial.HOLOGRAPHIC },
+            get = { it.style.holoSpeed }, set = { c, v -> c.copy(style = c.style.copy(holoSpeed = v)) })
+
+        section = "Light & depth"
+        slider("light", "Light direction", 0f..359f, 1f, "°", description = "Where highlights and shadows come from.",
+            visible = { it.style.material in setOf(SurfaceMaterial.LIQUID_GLASS, SurfaceMaterial.HOLOGRAPHIC, SurfaceMaterial.FROSTED, SurfaceMaterial.NEUMORPHIC, SurfaceMaterial.CLAY) },
+            get = { it.style.lightAngle.toFloat() }, set = { c, v -> c.copy(style = c.style.copy(lightAngle = v.toInt())) })
+        slider("depth", "Depth", 0f..1f, 0.01f, format = ::pct, visible = { it.style.material in setOf(SurfaceMaterial.NEUMORPHIC, SurfaceMaterial.CLAY) },
+            limitation = { _, _ -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) "Soft shadows need Android 9 or newer." else null },
+            get = { it.style.depth }, set = { c, v -> c.copy(style = c.style.copy(depth = v)) })
+
+        section = "Neon"
+        color("glowColor", "Glow colour", alpha = false, visible = { it.style.material == SurfaceMaterial.NEON },
+            get = { it.style.glowColor }, set = { c, v -> c.copy(style = c.style.copy(glowColor = v)) })
+        slider("glowRadius", "Glow size", 0f..40f, 1f, "dp", visible = { it.style.material == SurfaceMaterial.NEON },
+            get = { it.style.glowRadiusDp.toFloat() }, set = { c, v -> c.copy(style = c.style.copy(glowRadiusDp = v.toInt())) })
+        toggle("glowPulse", "Pulsing glow", visible = { it.style.material == SurfaceMaterial.NEON },
+            get = { it.style.glowPulse }, set = { c, v -> c.copy(style = c.style.copy(glowPulse = v)) })
+
+        section = "Icons"
+        toggle("plates", "Icons on material plates", "Every icon sits on a small plate of the selected material.", keywords = listOf("glass icons"),
+            get = { it.style.iconPlates }, set = { c, v -> c.copy(style = c.style.copy(iconPlates = v)) })
+        toggle("clear", "Clear icons", "Grayscale, brightened glyphs (looks best with glass plates).", keywords = listOf("tinted", "monochrome", "ios"),
+            get = { it.style.clearIcons }, set = { c, v -> c.copy(style = c.style.copy(clearIcons = v)) })
+    }
+
+    private val lockShown: (FlyerConfig) -> Boolean = { it.lock.showButton }
+
+    val lock = build(FlyerCategory.LOCK) {
+        section = "Lock button"
+        toggle("button", "Show lock button", "Tap it to lock the home screen. Hold it to lock the phone.", keywords = listOf("privacy", "secure"),
+            get = { it.lock.showButton }, set = { c, v -> c.copy(lock = c.lock.copy(showButton = v)) })
+        choice("corner", "Corner", listOf(LockCorner.TOP_START to "Top left", LockCorner.TOP_END to "Top right", LockCorner.BOTTOM_START to "Bottom left", LockCorner.BOTTOM_END to "Bottom right"),
+            visible = lockShown, get = { it.lock.corner }, set = { c, v -> c.copy(lock = c.lock.copy(corner = v)) })
+        choice("icon", "Button icon", listOf(LockIcon.PADLOCK to "Padlock", LockIcon.SHIELD to "Shield", LockIcon.MOON to "Moon", LockIcon.KEY to "Key"),
+            visible = lockShown, get = { it.lock.icon }, set = { c, v -> c.copy(lock = c.lock.copy(icon = v)) })
+        slider("size", "Button size", 28f..96f, 1f, "dp", visible = lockShown,
+            get = { it.lock.buttonSizeDp.toFloat() }, set = { c, v -> c.copy(lock = c.lock.copy(buttonSizeDp = v.toInt())) })
+        slider("margin", "Distance from corner", 0f..64f, 1f, "dp", visible = lockShown,
+            get = { it.lock.buttonMarginDp.toFloat() }, set = { c, v -> c.copy(lock = c.lock.copy(buttonMarginDp = v.toInt())) })
+        slider("opacity", "Button opacity", 0.15f..1f, 0.01f, format = ::pct, visible = lockShown,
+            get = { it.lock.buttonOpacity }, set = { c, v -> c.copy(lock = c.lock.copy(buttonOpacity = v)) })
+        toggle("hold", "Hold to lock the phone", visible = lockShown,
+            get = { it.lock.holdToLockPhone }, set = { c, v -> c.copy(lock = c.lock.copy(holdToLockPhone = v)) })
+        slider("holdTime", "Hold time", 500f..4000f, 100f, " ms", visible = { it.lock.showButton && it.lock.holdToLockPhone },
+            get = { it.lock.holdDurationMs.toFloat() }, set = { c, v -> c.copy(lock = c.lock.copy(holdDurationMs = v.toInt())) })
+        toggle("both", "Also lock the launcher when locking the phone", visible = { it.lock.holdToLockPhone },
+            get = { it.lock.alsoLockLauncherWithPhone }, set = { c, v -> c.copy(lock = c.lock.copy(alsoLockLauncherWithPhone = v)) })
+
+        section = "Unlocking"
+        choice("method", "Unlock with", listOf(UnlockMethod.PHONE to "Phone's screen lock", UnlockMethod.LAUNCHER_PIN to "Launcher PIN", UnlockMethod.LAUNCHER_PASSWORD to "Launcher password", UnlockMethod.TAP to "Just tap (no security)"),
+            description = "The launcher PIN or password is separate from your phone's and is never included in backups.", keywords = listOf("password", "pin", "fingerprint", "biometric"),
+            get = { it.lock.unlockMethod }, set = { c, v -> c.copy(lock = c.lock.copy(unlockMethod = v)) })
+        toggle("biometrics", "Allow fingerprint / face", visible = { it.lock.unlockMethod == UnlockMethod.PHONE },
+            limitation = { _, _ -> if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) "Android 10 and older always offer every method your phone supports." else null },
+            get = { it.lock.allowBiometrics }, set = { c, v -> c.copy(lock = c.lock.copy(allowBiometrics = v)) })
+        slider("attempts", "Wrong tries before a cooldown", 3f..20f, 1f, visible = { it.lock.unlockMethod == UnlockMethod.LAUNCHER_PIN || it.lock.unlockMethod == UnlockMethod.LAUNCHER_PASSWORD },
+            get = { it.lock.maxAttempts.toFloat() }, set = { c, v -> c.copy(lock = c.lock.copy(maxAttempts = v.toInt())) })
+        toggle("screenOff", "Lock when the screen turns off", keywords = listOf("auto lock"),
+            get = { it.lock.lockOnScreenOff }, set = { c, v -> c.copy(lock = c.lock.copy(lockOnScreenOff = v)) })
+        toggle("flyer", "Protect Flyer", "Unlock before opening Flyer (stays unlocked for 5 minutes).",
+            get = { it.lock.protectFlyer }, set = { c, v -> c.copy(lock = c.lock.copy(protectFlyer = v)) })
+
+        section = "Lock screen"
+        toggle("clock", "Show the time", get = { it.lock.showClock }, set = { c, v -> c.copy(lock = c.lock.copy(showClock = v)) })
+        slider("clockSize", "Clock size", 32f..160f, 1f, "sp", visible = { it.lock.showClock },
+            get = { it.lock.clockSizeSp }, set = { c, v -> c.copy(lock = c.lock.copy(clockSizeSp = v)) })
+        toggle("date", "Show the date", get = { it.lock.showDate }, set = { c, v -> c.copy(lock = c.lock.copy(showDate = v)) })
+        toggle("battery", "Show battery", get = { it.lock.showBattery }, set = { c, v -> c.copy(lock = c.lock.copy(showBattery = v)) })
+        toggle("alarm", "Show next alarm", get = { it.lock.showNextAlarm }, set = { c, v -> c.copy(lock = c.lock.copy(showNextAlarm = v)) })
+        text("message", "Away message", "e.g. Back in 5 minutes", validate = { if (it.length > 120) "Up to 120 characters" else null },
+            keywords = listOf("owner info", "note"), get = { it.lock.awayMessage }, set = { c, v -> c.copy(lock = c.lock.copy(awayMessage = v)) })
+        slider("blur", "Blur the home screen", R.blur.f(), 1f, "dp", limitation = { _, t -> if (!t.blurSupported) "Blur needs Android 12 or newer." else null },
+            get = { it.lock.blurDp.toFloat() }, set = { c, v -> c.copy(lock = c.lock.copy(blurDp = v.toInt())) })
+        slider("dim", "Darken the home screen", 0f..1f, 0.01f, format = ::pct,
+            get = { it.lock.dim }, set = { c, v -> c.copy(lock = c.lock.copy(dim = v)) })
+    }
+
     val all: List<SettingSpec> = home + icons + dock + drawer + widgets + folders + gestures + animations + appearance +
-        typography + desktop + search + performance + advanced
+        typography + desktop + search + performance + advanced + materials + lock
 
     fun forCategory(category: FlyerCategory): List<SettingSpec> = all.filter { it.category == category }
 

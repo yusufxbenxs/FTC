@@ -206,7 +206,8 @@ fun LiveEditorScreen(
                     }
                 }
                 val sel = selection as? EditorSelection.Item
-                if (sel != null) {
+                val selItem = sel?.let { WorkspaceEngine.find(session.draft.layout, it.id)?.second }
+                if (sel != null && selItem != null && !WorkspaceEngine.isProtected(selItem)) {
                     IconButton(onClick = { session.updateLayout("Remove") { WorkspaceEngine.removeItem(it, sel.id) }; selection = null }) {
                         Icon(Icons.Outlined.Delete, "Remove selected")
                     }

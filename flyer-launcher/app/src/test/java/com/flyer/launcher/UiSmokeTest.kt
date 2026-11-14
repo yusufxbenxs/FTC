@@ -10,6 +10,8 @@ import com.flyer.launcher.flyer.FlyerRoute
 import com.flyer.launcher.launcher.LauncherActivity
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import org.junit.Rule
@@ -207,5 +209,88 @@ class UiSmokeTest {
         assertTrue("editor drag should move the draft item: $before -> $draft", draft.cell.y < before.cell.y)
         assertTrue("committed layout is untouched until Apply", flyerItemOnPage0().cell == before.cell)
         snap("72-editor-after-drag")
+    }
+
+    private fun uiState() = LauncherActivity::class.java.getDeclaredField("ui").apply { isAccessible = true }
+        .get(rule.activity) as com.flyer.launcher.launcher.LauncherUiState
+
+    @Test
+    fun lockButtonLocksAndPinUnlocks() {
+        awaitLayout()
+        kotlinx.coroutines.runBlocking { core().lock.setCredential(com.flyer.launcher.core.lock.CredentialType.PIN, "1234") }
+        rule.runOnUiThread {
+            core().editHome("lock setup") { d ->
+                // Blur off: exercises the faded-home fallback (software rendering can't blur anyway).
+                d.copy(config = d.config.copy(
+                    lock = d.config.lock.copy(showButton = true, unlockMethod = com.flyer.launcher.core.config.UnlockMethod.LAUNCHER_PIN, awayMessage = "Back in 5 minutes"),
+                    performance = d.config.performance.copy(blurEffects = false),
+                ))
+            }
+        }
+        rule.waitForIdle()
+        snap("80-lock-button")
+        rule.onNodeWithContentDescription("Lock (hold to lock the phone)").performClick()
+        rule.waitUntil(5_000) { core().lock.state.value.locked }
+        snap("81-locked")
+        // Home is not usable while locked: tapping the Flyer icon underneath does nothing.
+        rule.onNodeWithText("Flyer").performClick()
+        rule.waitForIdle()
+        assertTrue(!uiState().flyer.isOpen)
+        rule.onNodeWithText("Unlock").performClick()
+        rule.waitForIdle()
+        listOf("9", "9", "9", "9").forEach { rule.onNodeWithText(it).performClick() }
+        rule.onNodeWithContentDescription("Unlock").performClick()
+        rule.waitUntil(10_000) { core().lock.state.value.failedAttempts == 1 }
+        rule.waitForIdle()
+        snap("82-wrong-pin")
+        assertTrue(core().lock.state.value.locked)
+        listOf("1", "2", "3", "4").forEach { rule.onNodeWithText(it).performClick() }
+        rule.onNodeWithContentDescription("Unlock").performClick()
+        rule.waitUntil(10_000) { !core().lock.state.value.locked }
+        rule.waitForIdle()
+        assertTrue(!core().lock.state.value.locked)
+    }
+
+    @Test
+    fun builtInFlyerHasNoRemoveEntry() {
+        awaitLayout()
+        rule.onNodeWithText("Flyer").performTouchInput { down(center); advanceEventTime(1200); up() }
+        rule.waitForIdle()
+        rule.onNodeWithText("Customize icon & label").assertExists()
+        rule.onNodeWithText("Remove").assertDoesNotExist()
+        rule.onNodeWithText("Uninstall").assertDoesNotExist()
+    }
+
+    @Test
+    fun advancedThemesRender() {
+        awaitLayout()
+        com.flyer.launcher.core.theme.ThemePresets.advanced.forEachIndexed { i, preset ->
+            rule.runOnUiThread { core().editHome(preset.name) { d -> d.copy(config = preset.apply(d.config)) } }
+            rule.waitForIdle()
+            snap("%02d-theme-%s".format(90 + i, preset.id))
+            if (preset.id == "liquid-glass") {
+                onUi { openDrawer() }
+                snap("90b-liquid-glass-drawer")
+                onUi { onBackPressedDispatcher.onBackPressed() }
+                onUi { perform(com.flyer.launcher.core.config.GestureAction(com.flyer.launcher.core.config.ActionType.HOME_MENU)) }
+                snap("90c-liquid-glass-menu")
+                onUi { onBackPressedDispatcher.onBackPressed() }
+            }
+        }
+        onUi { openFlyer(FlyerRoute.Category(FlyerCategory.THEMES)) }
+        snap("99a-flyer-themes")
+        onUi { openFlyer(FlyerRoute.Category(FlyerCategory.MATERIALS)) }
+        snap("99b-flyer-materials")
+        onUi { openFlyer(FlyerRoute.Category(FlyerCategory.LOCK)) }
+        snap("99c-flyer-lock")
+    }
+
+    @Test
+    fun copyOriginalLayoutDialogOpens() {
+        awaitLayout()
+        onUi { openFlyer(FlyerRoute.Category(FlyerCategory.HOME)) }
+        rule.onNodeWithText("Copy original home screen layout").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("Copy original home screen").fetchSemanticsNodes().isNotEmpty() }
+        snap("98-copy-layout-dialog")
     }
 }

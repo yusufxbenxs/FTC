@@ -11,6 +11,17 @@
     <!-- "Uninstall" entry of the app context menu (opens the system confirmation dialog). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+        "Copy original home screen layout": read access to other launchers' layouts. Most modern
+        launchers keep these signature-only (then Android simply doesn't grant them and Flyer falls
+        back to the launcher's built-in factory layout).
+    -->
+    <uses-permission android:name="com.android.launcher.permission.READ_SETTINGS" />
+    <uses-permission android:name="com.android.launcher3.permission.READ_SETTINGS" />
+    <uses-permission android:name="com.google.android.launcher.permission.READ_SETTINGS" />
+    <uses-permission android:name="com.sec.android.app.launcher.permission.READ_SETTINGS" />
+    <!-- Unlocking the launcher lock with the phone's own fingerprint/face/PIN. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <queries>
         <intent>
@@ -26,6 +37,14 @@
         </intent>
         <intent>
             <action android:name="com.gau.go.launcherex.theme" />
+        </intent>
+        <!-- Other home apps and partner layout packages (Copy original home screen layout). -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+        <intent>
+            <action android:name="com.android.launcher3.action.PARTNER_CUSTOMIZATION" />
         </intent>
         <!-- App widget providers (receivers handling APPWIDGET_UPDATE). -->
         <intent>
@@ -88,5 +107,23 @@
             </intent-filter>
         </activity>
 
+
+        <!--
+            Opt-in device admin used only to lock the phone when the lock button is held
+            (policy: force-lock). Inactive until the user enables it from Flyer › Lock.
+        -->
+        <receiver
+            android:name=".core.lock.FlyerDeviceAdminReceiver"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:description="@string/device_admin_description"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

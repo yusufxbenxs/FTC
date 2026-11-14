@@ -22,6 +22,11 @@ interface FlyerPlatform {
     fun isAccessibilityHelperEnabled(): Boolean
     fun openWallpaperPicker()
 
+    /** Checks the phone's own screen lock (biometric or PIN/pattern/password). */
+    fun requestPhoneCredential(title: String, onResult: (Boolean) -> Unit)
+    fun requestDeviceAdmin()
+    fun lockLauncher()
+
     /** Starts the widget add flow (bind permission, configuration); [onAdded] receives the new widget id. */
     fun addWidget(choice: WidgetChoice, surface: Surface, onAdded: (com.flyer.launcher.core.model.WorkspaceItem) -> Unit)
 }
@@ -38,6 +43,9 @@ object NoOpFlyerPlatform : FlyerPlatform {
     override fun openAccessibilitySettings() = Unit
     override fun isAccessibilityHelperEnabled() = false
     override fun openWallpaperPicker() = Unit
+    override fun requestPhoneCredential(title: String, onResult: (Boolean) -> Unit) = onResult(false)
+    override fun requestDeviceAdmin() = Unit
+    override fun lockLauncher() = Unit
     override fun addWidget(choice: WidgetChoice, surface: Surface, onAdded: (com.flyer.launcher.core.model.WorkspaceItem) -> Unit) = Unit
 }
 

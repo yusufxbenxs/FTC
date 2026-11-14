@@ -61,6 +61,12 @@ import com.flyer.launcher.core.config.PageIndicatorStyle
 import com.flyer.launcher.core.config.PageTransition
 import com.flyer.launcher.core.config.SearchBarPosition
 import com.flyer.launcher.core.theme.LocalDeviceTraits
+import com.flyer.launcher.core.config.SurfaceMaterial
+import com.flyer.launcher.launcher.render.materials.AnimatedBackground
+import com.flyer.launcher.launcher.render.materials.BackdropBlur
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.MaterialSurface
+import androidx.compose.ui.platform.LocalDensity
 import com.flyer.launcher.core.theme.withOpacity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -97,6 +103,7 @@ fun HomeBackground(bg: BackgroundConfig, modifier: Modifier = Modifier) {
                     )
                 } else Box(Modifier.fillMaxSize().background(bg.color.color))
             }
+            else -> AnimatedBackground(bg)
         }
         if (bg.dim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = bg.dim)))
     }
@@ -176,28 +183,37 @@ fun DockContainer(
     config: FlyerConfig,
     vertical: Boolean,
     modifier: Modifier = Modifier,
-    backdrop: (@Composable BoxScope.() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val d = config.dock
-    val shape = RoundedCornerShape(d.cornerRadiusDp.dp)
     val traits = LocalDeviceTraits.current
+    val backdrop = LocalBackdrops.current.background
     val outer = if (vertical) {
         Modifier.fillMaxHeight(d.lengthFraction).width(d.thicknessDp.dp).padding(vertical = d.edgeMarginDp.dp, horizontal = d.marginDp.dp)
     } else {
         Modifier.fillMaxWidth(d.lengthFraction).height(d.thicknessDp.dp).padding(horizontal = d.edgeMarginDp.dp, vertical = d.marginDp.dp)
     }
+    val materialOn = config.style.applyToDock && config.style.material != SurfaceMaterial.FLAT
     Box(
         if (vertical) Modifier.fillMaxHeight() else Modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier.then(outer).clip(shape)
-                .let { if (d.borderWidthDp > 0f) it.border(d.borderWidthDp.dp, d.borderColor.color, shape) else it },
+        MaterialSurface(
+            tint = d.background.withOpacity(d.opacity),
+            cornerRadius = d.cornerRadiusDp.dp,
+            modifier = modifier.then(outer),
+            enabled = config.style.applyToDock,
+            backdrop = backdrop,
+            borderWidth = d.borderWidthDp.dp,
+            borderColor = d.borderColor.color,
         ) {
-            val blurActive = d.blurDp > 0 && traits.blurSupported && config.performance.blurEffects && backdrop != null
-            if (blurActive) backdrop?.invoke(this)
-            Box(Modifier.matchParentSize().background(d.background.withOpacity(d.opacity)))
+            // The dock's own blur setting also works with the flat material.
+            val blurActive = !materialOn && d.blurDp > 0 && traits.blurSupported && config.performance.blurEffects && backdrop != null
+            if (blurActive) {
+                val cap = if (config.performance.effects == com.flyer.launcher.core.config.EffectsLevel.BALANCED) 16 else 64
+                BackdropBlur(backdrop!!, with(LocalDensity.current) { d.blurDp.coerceAtMost(cap).dp.toPx() })
+                Box(Modifier.matchParentSize().background(d.background.withOpacity(d.opacity)))
+            }
             val arrangementH = dockArrangementH(d)
             val arrangementV = dockArrangementV(d)
             if (vertical) {
@@ -301,39 +317,3 @@ fun FlyerConfig.hasHomeSearch() = search.homeBar != SearchBarPosition.HIDDEN
 
 @Composable
 fun rememberSearchBarHeight(config: FlyerConfig) = remember(config.search.barHeightDp) { config.search.barHeightDp.dp }
-
-/**
- * Backdrop blur for the dock (and other panels): redraws the launcher-rendered background behind
- * the panel, aligned to the screen, and blurs it. Android cannot blur the system wallpaper inside
- * a region of our window, so this is only available for launcher-rendered backgrounds (API 31+).
- */
-@Composable
-fun rememberDockBackdrop(config: FlyerConfig): (@Composable BoxScope.() -> Unit)? {
-    val bg = config.home.background
-    if (bg.type == BackgroundType.SYSTEM_WALLPAPER || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
-    return remember(bg, config.dock.blurDp) {
-        {
-            BackdropBlur(bg, config.dock.blurDp)
-        }
-    }
-}
-
-@Composable
-fun BoxScope.BackdropBlur(bg: BackgroundConfig, blurDp: Int) {
-    var origin by remember { mutableStateOf(Offset.Zero) }
-    val root = LocalView.current.rootView
-    val w = root.width.takeIf { it > 0 } ?: 1080
-    val h = root.height.takeIf { it > 0 } ?: 2340
-    Box(
-        Modifier.matchParentSize().clipToBounds().onGloballyPositioned { origin = it.positionInRoot() },
-    ) {
-        Box(
-            Modifier
-                .layout { measurable, _ ->
-                    val p = measurable.measure(Constraints.fixed(w, h))
-                    layout(0, 0) { p.place(-origin.x.roundToInt(), -origin.y.roundToInt()) }
-                }
-                .blur(blurDp.dp),
-        ) { HomeBackground(bg.copy(dim = 0f)) }
-    }
-}

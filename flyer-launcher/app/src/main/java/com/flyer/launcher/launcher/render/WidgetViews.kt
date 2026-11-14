@@ -1,5 +1,7 @@
 package com.flyer.launcher.launcher.render
 
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.MaterialSurface
 import android.graphics.Outline
 import android.view.View
 import android.view.ViewGroup
@@ -51,6 +53,15 @@ fun WidgetContainer(item: WidgetItem, modifier: Modifier = Modifier, content: @C
     val radius = (item.cornerRadiusDp ?: w.cornerRadiusDp).dp
     val shape = RoundedCornerShape(radius)
     val bg = (item.background ?: w.containerBackground).withOpacity(w.containerOpacity)
+    val config = LocalFlyerConfig.current
+    if (config.style.applyToWidgets && config.style.material != com.flyer.launcher.core.config.SurfaceMaterial.FLAT) {
+        MaterialSurface(
+            tint = bg, cornerRadius = radius,
+            modifier = modifier.fillMaxSize().padding((item.paddingDp ?: w.paddingDp).dp),
+            backdrop = LocalBackdrops.current.background,
+        ) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() } }
+        return
+    }
     var m = modifier.fillMaxSize().padding((item.paddingDp ?: w.paddingDp).dp)
     if (w.clipToCorners) m = m.clip(shape)
     if (bg.alpha > 0f) m = m.background(bg, shape)

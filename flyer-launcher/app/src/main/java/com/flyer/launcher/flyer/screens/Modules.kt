@@ -170,9 +170,10 @@ fun ThemesSection(session: FlyerSession, core: LauncherCore) {
     var message by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(refresh) { saved = core.persistence.listSnapshots().filter { it.kind == BackupKind.THEME } }
 
-    SectionHeader("Built-in themes")
+    AdvancedThemesGallery(session)
+    SectionHeader("Classic themes")
     FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        ThemePresets.all.forEach { preset ->
+        ThemePresets.classic.forEach { preset ->
             Card(
                 onClick = { session.updateConfig("Theme: ${preset.name}", null) { preset.apply(it) } },
                 modifier = Modifier.width(160.dp),

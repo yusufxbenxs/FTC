@@ -50,6 +50,7 @@ import com.flyer.launcher.core.theme.LocalFlyerConfig
 import com.flyer.launcher.core.theme.LocalLauncherFont
 import com.flyer.launcher.core.theme.ThemeEngine
 import com.flyer.launcher.core.theme.withOpacity
+import com.flyer.launcher.launcher.render.materials.MaterialSurface
 
 /** Loads (and caches) the rendered icon bitmap of an app off the main thread. */
 @Composable
@@ -88,11 +89,21 @@ fun rememberShortcutIcon(item: ShortcutItem, sizeDp: Dp): ImageBitmap? {
 @Composable
 fun IconImage(bitmap: ImageBitmap?, size: Dp, modifier: Modifier = Modifier, style: ItemStyle = ItemStyle()) {
     val icons = LocalFlyerConfig.current.icons
+    val look = LocalFlyerConfig.current.style
     val shape = remember(icons.shape, icons.cornerRadiusPercent) {
         IconShapes.composeShape(if (icons.shape == IconShape.SYSTEM) IconShape.CIRCLE else icons.shape, icons.cornerRadiusPercent)
     }
-    val filter = remember(icons.saturation) {
-        if (icons.saturation >= 0.999f) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(icons.saturation) })
+    val filter = remember(icons.saturation, look.clearIcons) {
+        when {
+            look.clearIcons -> ColorFilter.colorMatrix(
+                // "Clear" glyphs: grayscale, brightened and slightly see-through.
+                ColorMatrix().apply { setToSaturation(0f) }.apply {
+                    timesAssign(ColorMatrix(floatArrayOf(1.35f, 0f, 0f, 0f, 38f, 0f, 1.35f, 0f, 0f, 38f, 0f, 0f, 1.35f, 0f, 38f, 0f, 0f, 0f, 0.9f, 0f)))
+                },
+            )
+            icons.saturation >= 0.999f -> null
+            else -> ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(icons.saturation) })
+        }
     }
     val scale = style.iconScale ?: 1f
     val finalSize = size * scale
@@ -106,6 +117,20 @@ fun IconImage(bitmap: ImageBitmap?, size: Dp, modifier: Modifier = Modifier, sty
         m = m.border(icons.borderWidthDp.dp, icons.borderColor.color, shape)
     }
     val alpha = icons.opacity * (style.opacity ?: 1f)
+    if (look.iconPlates) {
+        // Icon on a small material plate (glass, neon, clay… follows the selected material).
+        val plateCorner = when (icons.shape) {
+            IconShape.CIRCLE, IconShape.SYSTEM, IconShape.CLOVER -> finalSize / 2
+            IconShape.SQUARE -> finalSize * 0.08f
+            IconShape.ROUNDED_SQUARE, IconShape.TEARDROP, IconShape.PEBBLE, IconShape.HEXAGON -> finalSize * (icons.cornerRadiusPercent / 200f)
+            IconShape.SQUIRCLE -> finalSize * 0.3f
+        }
+        Box(modifier.size(finalSize).alpha(alpha), contentAlignment = Alignment.Center) {
+            MaterialSurface(tint = Color.White.copy(alpha = 0.22f), cornerRadius = plateCorner, modifier = Modifier.fillMaxSize())
+            if (bitmap != null) Image(bitmap, null, colorFilter = filter, modifier = Modifier.size(finalSize * 0.7f).let { im -> style.rotationDeg?.let { im.rotate(it) } ?: im })
+        }
+        return
+    }
     Box(m.alpha(alpha), contentAlignment = Alignment.Center) {
         if (bitmap != null) {
             Image(bitmap, contentDescription = null, colorFilter = filter, modifier = Modifier.fillMaxSize())

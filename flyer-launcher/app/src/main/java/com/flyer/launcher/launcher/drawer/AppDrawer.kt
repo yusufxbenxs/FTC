@@ -1,5 +1,7 @@
 package com.flyer.launcher.launcher.drawer
 
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.MaterialSurface
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -233,8 +235,16 @@ fun AppDrawer(
         }
     }
 
+    MaterialSurface(
+        tint = d.background.withOpacity(d.opacity),
+        cornerRadius = d.cornerRadiusDp.dp,
+        topCornersOnly = true,
+        modifier = modifier.fillMaxSize(),
+        enabled = config.style.applyToDrawer,
+        backdrop = LocalBackdrops.current.home,
+    ) {
     Box(
-        modifier.fillMaxSize().clip(shape).background(d.background.withOpacity(d.opacity))
+        Modifier.fillMaxSize()
             .padding(top = insets.calculateTopPadding(), bottom = insets.calculateBottomPadding()),
     ) {
         Column(Modifier.fillMaxSize().let { if (interactive) it.imePadding() else it }) {
@@ -295,6 +305,7 @@ fun AppDrawer(
             }
             if (d.searchAtBottom) searchField()
         }
+    }
     }
 }
 

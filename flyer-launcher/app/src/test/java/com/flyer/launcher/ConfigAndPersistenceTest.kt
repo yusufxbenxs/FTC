@@ -98,7 +98,7 @@ class ConfigAndPersistenceTest {
         val doc = LauncherDocument(
             config = FlyerConfig(icons = IconConfig(shape = IconShape.HEXAGON, sizeDp = 64)),
             layout = HomeLayout(
-                pages = listOf(HomePage(items = listOf(AppItem(id = "a", appKey = "com.x/.Main@0", cell = Cell(1, 1)), FolderItem(id = "f", apps = listOf("a", "b"), cell = Cell(2, 2))))),
+                pages = listOf(HomePage(items = listOf(AppItem(id = "a", appKey = "com.x/.Main@0", cell = Cell(1, 1)), FolderItem(id = "f", apps = listOf("a", "b"), cell = Cell(2, 2)), AppItem(id = "fl", appKey = "builtin:flyer", cell = Cell(0, 3))))),
                 appOverrides = mapOf("com.x/.Main@0" to AppOverride(label = "X", icon = IconSource.Pack("pack", "ic_x"))),
                 initialized = true,
             ),
@@ -131,14 +131,15 @@ class ConfigAndPersistenceTest {
 
     @Test
     fun backupRoundTripAndThemeOmitsLayout() {
-        val doc = LauncherDocument(layout = HomeLayout(pages = listOf(HomePage(items = listOf(AppItem(id = "a", appKey = "k")))), initialized = true))
+        val doc = LauncherDocument(layout = HomeLayout(pages = listOf(HomePage(items = listOf(AppItem(id = "a", appKey = "k"), AppItem(id = "fl", appKey = "builtin:flyer", cell = Cell(1, 0))))), initialized = true))
         val full = DocumentCodec.decodeBackup(DocumentCodec.encodeBackup(doc, BackupKind.FULL, "Mine", 1L))
         assertEquals(BackupKind.FULL, full.kind)
         assertEquals("Mine", full.name)
-        assertEquals(1, full.document.layout.pages[0].items.size)
+        assertEquals(2, full.document.layout.pages[0].items.size)
         val theme = DocumentCodec.decodeBackup(DocumentCodec.encodeBackup(doc, BackupKind.THEME, "Look", 1L))
         assertEquals(BackupKind.THEME, theme.kind)
-        assertTrue(theme.document.layout.pages[0].items.isEmpty())
+        // A theme carries no layout; only the always-present Flyer shortcut appears.
+        assertTrue(theme.document.layout.pages[0].items.none { it is AppItem && it.appKey == "k" })
     }
 
     @Test

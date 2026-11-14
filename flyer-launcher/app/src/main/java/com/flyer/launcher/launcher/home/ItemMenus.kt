@@ -83,7 +83,7 @@ object ItemMenus {
                 ui.menu = null
                 actions.openFlyer(FlyerRoute.LiveEditor(item.id))
             }
-            if (!ui.core.config.value.home.lockLayout) {
+            if (!ui.core.config.value.home.lockLayout && entry.builtIn == null) {
                 entries += removeEntry(ui, item, if (surface == Surface.Dock) "Remove from dock" else "Remove")
             }
         } else {
@@ -102,7 +102,7 @@ object ItemMenus {
                     }
                 }
             }
-            if (entry.builtIn != com.flyer.launcher.core.apps.BuiltInApp.FLYER) {
+            if (entry.builtIn == null) {
                 entries += MenuEntry("Hide from drawer", Icons.Outlined.VisibilityOff) {
                     ui.menu = null
                     core.editHome("Hide ${entry.label}") { doc -> doc.copy(layout = doc.layout.copy(hiddenApps = doc.layout.hiddenApps + entry.key)) }

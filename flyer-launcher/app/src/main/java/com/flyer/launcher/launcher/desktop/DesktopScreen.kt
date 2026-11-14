@@ -1,5 +1,7 @@
 package com.flyer.launcher.launcher.desktop
 
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.MaterialSurface
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -236,8 +238,15 @@ private fun Taskbar(ui: LauncherUiState, config: FlyerConfig, layout: HomeLayout
         ui.drag.register("taskbar", pinZone)
         onDispose { ui.drag.unregister("taskbar") }
     }
+    MaterialSurface(
+        tint = d.taskbarBackground.color,
+        cornerRadius = 0.dp,
+        modifier = Modifier.fillMaxWidth().height(d.taskbarHeightDp.dp),
+        enabled = config.style.applyToTaskbar,
+        backdrop = LocalBackdrops.current.background,
+    ) {
     Row(
-        Modifier.fillMaxWidth().height(d.taskbarHeightDp.dp).background(d.taskbarBackground.color)
+        Modifier.fillMaxSize()
             .onGloballyPositioned { pinZone.rootBounds = it.boundsInRoot() }
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -258,6 +267,7 @@ private fun Taskbar(ui: LauncherUiState, config: FlyerConfig, layout: HomeLayout
         }
         TaskbarButton(Icons.Outlined.Tune, "Flyer") { actions.openFlyer() }
         if (d.taskbarShowClock) TaskbarClock()
+    }
     }
 }
 
@@ -364,10 +374,15 @@ fun StartMenu(
             .map { it.first }
     }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    MaterialSurface(
+        tint = d.panelBackground.color,
+        cornerRadius = d.panelCornerDp.dp,
+        modifier = modifier.padding(12.dp).width(d.startMenuWidthDp.dp).height(d.startMenuHeightDp.dp),
+        enabled = config.style.applyToTaskbar,
+        backdrop = LocalBackdrops.current.background,
+    ) {
     Column(
-        modifier.padding(12.dp).width(d.startMenuWidthDp.dp).height(d.startMenuHeightDp.dp)
-            .clip(RoundedCornerShape(d.panelCornerDp.dp)).background(d.panelBackground.color)
-            .clickableNoRipple { }.padding(14.dp),
+        Modifier.fillMaxSize().clickableNoRipple { }.padding(14.dp),
     ) {
         TextField(
             query, { query = it }, singleLine = true,
@@ -405,6 +420,7 @@ fun StartMenu(
                 }
             }
         }
+    }
     }
 }
 

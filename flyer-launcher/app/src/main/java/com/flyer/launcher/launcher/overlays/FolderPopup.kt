@@ -1,5 +1,7 @@
 package com.flyer.launcher.launcher.overlays
 
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.MaterialSurface
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
@@ -131,16 +133,22 @@ fun FolderPopup(
             }
         }
 
-        Column(
-            Modifier
+        MaterialSurface(
+            tint = f.popupBackground.withOpacity(f.popupOpacity),
+            cornerRadius = if (fullscreen) 0.dp else f.popupCornerRadiusDp.dp,
+            modifier = Modifier
                 .align(Alignment.Center)
                 .offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }
                 .then(anim)
                 .width(cardWidth)
                 .let { if (fullscreen) it.fillMaxSize() else it }
-                .windowInsetsPadding(WindowInsets.systemBars)
-                .clip(shape)
-                .background(f.popupBackground.withOpacity(f.popupOpacity))
+                .windowInsetsPadding(WindowInsets.systemBars),
+            enabled = config.style.applyToFolders,
+            backdrop = LocalBackdrops.current.home,
+        ) {
+        Column(
+            Modifier
+                .let { if (fullscreen) it.fillMaxSize() else it }
                 .clickableNoRipple { }
                 .padding(16.dp),
         ) {
@@ -175,6 +183,7 @@ fun FolderPopup(
                     FolderAppItem(ui, folder, key, interactive)
                 }
             }
+        }
         }
     }
 }

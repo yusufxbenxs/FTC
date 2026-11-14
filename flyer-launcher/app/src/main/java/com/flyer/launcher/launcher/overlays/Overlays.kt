@@ -1,5 +1,7 @@
 package com.flyer.launcher.launcher.overlays
 
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.MaterialSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -75,13 +77,15 @@ fun MenuOverlay(menu: MenuState, onDismiss: () -> Unit) {
     Box(Modifier.fillMaxSize().clickableNoRipple(onDismiss)) {
         Layout(
             content = {
+                MaterialSurface(
+                    tint = bg,
+                    cornerRadius = radius,
+                    modifier = Modifier.widthIn(min = 200.dp, max = 300.dp).shadow(12.dp, RoundedCornerShape(radius)),
+                    enabled = config.style.applyToMenus,
+                    backdrop = LocalBackdrops.current.home,
+                ) {
                 Column(
-                    Modifier.widthIn(min = 200.dp, max = 300.dp)
-                        .shadow(12.dp, RoundedCornerShape(radius))
-                        .clip(RoundedCornerShape(radius))
-                        .background(bg)
-                        .clickableNoRipple { }
-                        .padding(vertical = 6.dp),
+                    Modifier.clickableNoRipple { }.padding(vertical = 6.dp),
                 ) {
                     menu.title?.let {
                         Text(it, color = fg.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), maxLines = 1)
@@ -91,6 +95,7 @@ fun MenuOverlay(menu: MenuState, onDismiss: () -> Unit) {
                         HorizontalDivider(color = fg.copy(alpha = 0.12f), modifier = Modifier.padding(vertical = 4.dp))
                     }
                     menu.entries.forEach { MenuRow(it, fg) }
+                }
                 }
             },
         ) { measurables, constraints ->
@@ -141,7 +146,8 @@ fun DragLayer(ui: LauncherUiState) {
     val entry = (visual as? AppItem)?.let { ui.core.resolveApp(it.appKey) }
     val fromSurface = session.source != null
     val actions = buildList {
-        if (fromSurface || session.placement is com.flyer.launcher.core.workspace.Placement.FromFolder) add(SpecialDrop.REMOVE)
+        val protected = entry?.builtIn != null
+        if ((fromSurface || session.placement is com.flyer.launcher.core.workspace.Placement.FromFolder) && !protected) add(SpecialDrop.REMOVE)
         if (isApp && entry?.builtIn == null) add(SpecialDrop.APP_INFO)
         if (isApp && !fromSurface && entry?.builtIn == null) add(SpecialDrop.HIDE)
         if (entry != null && ui.core.appsEngine.canUninstall(entry)) add(SpecialDrop.UNINSTALL)
@@ -232,15 +238,20 @@ fun ConfirmDialog(title: String, message: String, confirmLabel: String, onDismis
 @Composable
 fun LauncherSnackbar(text: String, actionLabel: String?, onAction: (() -> Unit)?, modifier: Modifier = Modifier) {
     val config = LocalFlyerConfig.current
+    val light = config.appearance.menuBackground.color.luminance() > 0.5f
+    val fg = if (light) Color(0xFF15151F) else Color.White
+    val accent = config.appearance.accent.color
+    // Keep the action readable when the accent is too close to the snackbar colour.
+    val action = if (light == (accent.luminance() > 0.45f)) fg else accent
     Row(
         modifier.padding(16.dp).clip(RoundedCornerShape(14.dp)).background(config.appearance.menuBackground.withOpacity(0.96f))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f, fill = false))
+        Text(text, color = fg, fontSize = 14.sp, modifier = Modifier.weight(1f, fill = false))
         if (actionLabel != null && onAction != null) {
             Spacer(Modifier.width(16.dp))
-            Text(actionLabel, color = config.appearance.accent.color, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onAction))
+            Text(actionLabel, color = action, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onAction))
         }
     }
 }

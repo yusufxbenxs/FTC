@@ -233,11 +233,9 @@ fun LiveDock(ui: LauncherUiState, config: FlyerConfig, items: List<WorkspaceItem
     val density = LocalDensity.current
     val cellPx = with(density) { (iconSize + 12.dp).toPx() }
     val cellHeightPx = with(density) { (config.dock.thicknessDp - 2 * config.dock.marginDp).dp.toPx() }
-    val backdrop = rememberDockBackdrop(config)
     DockContainer(
         config, vertical,
         modifier = Modifier.onGloballyPositioned { zone.rootBounds = it.boundsInRoot() },
-        backdrop = backdrop,
     ) {
         for (item in items.sortedBy { it.cell.x }) {
             key(item.id) {

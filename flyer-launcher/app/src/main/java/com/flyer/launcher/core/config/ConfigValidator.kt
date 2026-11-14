@@ -71,10 +71,40 @@ object ConfigValidator {
         performance = c.performance.copy(
             iconCacheMb = c.performance.iconCacheMb.coerceIn(Ranges.iconCacheMb),
             iconQuality = c.performance.iconQuality.finite(1f).coerceIn(0.5f, 2f),
+            effectsFps = c.performance.effectsFps.coerceIn(10, 120),
         ),
         advanced = c.advanced.copy(
             undoHistorySize = c.advanced.undoHistorySize.coerceIn(Ranges.history),
         ),
+        style = sanitize(c.style),
+        lock = sanitize(c.lock),
+    )
+
+    private fun sanitize(s: StyleConfig): StyleConfig = s.copy(
+        frostDp = s.frostDp.coerceIn(Ranges.blur),
+        refraction = s.refraction.unit(0.6f),
+        thicknessDp = s.thicknessDp.coerceIn(2, 48),
+        chromatic = s.chromatic.unit(0.3f),
+        highlight = s.highlight.unit(0.7f),
+        lightAngle = ((s.lightAngle % 360) + 360) % 360,
+        tintStrength = s.tintStrength.unit(0.35f),
+        grain = s.grain.unit(0.25f),
+        glowRadiusDp = s.glowRadiusDp.coerceIn(0, 40),
+        depth = s.depth.unit(0.6f),
+        holoSpeed = s.holoSpeed.finite(1f).coerceIn(0.1f, 4f),
+    )
+
+    private fun sanitize(l: LockConfig): LockConfig = l.copy(
+        buttonSizeDp = l.buttonSizeDp.coerceIn(28, 96),
+        buttonMarginDp = l.buttonMarginDp.coerceIn(0, 64),
+        buttonOpacity = l.buttonOpacity.unit(0.9f).coerceAtLeast(0.15f),
+        holdDurationMs = l.holdDurationMs.coerceIn(500, 4000),
+        awayMessage = l.awayMessage.take(120),
+        clockSizeSp = l.clockSizeSp.finite(80f).coerceIn(32f, 160f),
+        blurDp = l.blurDp.coerceIn(Ranges.blur),
+        dim = l.dim.unit(0.35f),
+        maxAttempts = l.maxAttempts.coerceIn(3, 20),
+        protectedApps = l.protectedApps.filterNot { it.startsWith("builtin:") }.toSet(),
     )
 
     private fun sanitize(h: HomeConfig): HomeConfig = h.copy(
@@ -93,6 +123,9 @@ object ConfigValidator {
             gradientAngle = ((h.background.gradientAngle % 360) + 360) % 360,
             imageBlurDp = h.background.imageBlurDp.coerceIn(Ranges.blur),
             dim = h.background.dim.unit(0f),
+            palette = h.background.palette.take(6).ifEmpty { BackgroundConfig().palette },
+            animSpeed = h.background.animSpeed.finite(1f).coerceIn(0.1f, 4f),
+            animDensity = h.background.animDensity.unit(0.5f),
             type = if (h.background.type == BackgroundType.IMAGE && h.background.imagePath.isNullOrBlank())
                 BackgroundType.SYSTEM_WALLPAPER else h.background.type,
         ),

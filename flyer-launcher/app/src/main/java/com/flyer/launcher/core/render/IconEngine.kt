@@ -242,6 +242,7 @@ class IconEngine(
         return out
     }
 
+    @androidx.annotation.RequiresApi(33)
     private fun themedSystem(drawable: AdaptiveIconDrawable, spec: IconSpec): Bitmap {
         val themed = AdaptiveIconDrawable(
             android.graphics.drawable.ColorDrawable(spec.themedBackground),

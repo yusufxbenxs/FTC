@@ -20,6 +20,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -51,7 +52,6 @@ import com.flyer.launcher.launcher.home.HomeFrame
 import com.flyer.launcher.launcher.home.PageIndicator
 import com.flyer.launcher.launcher.home.StaticItemVisual
 import com.flyer.launcher.launcher.home.WorkspaceSurface
-import com.flyer.launcher.launcher.home.rememberDockBackdrop
 import com.flyer.launcher.launcher.overlays.FolderPopup
 import com.flyer.launcher.launcher.render.LocalAppOverrides
 import com.flyer.launcher.launcher.render.LocalDraggingIds
@@ -59,6 +59,12 @@ import com.flyer.launcher.launcher.render.LocalRenderMode
 import com.flyer.launcher.launcher.render.RenderMode
 import com.flyer.launcher.launcher.render.SearchBarWidget
 import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import com.flyer.launcher.launcher.render.materials.BackdropLayer
+import com.flyer.launcher.launcher.render.materials.Backdrops
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.recordBackdrop
 import kotlinx.coroutines.withContext
 
 /** Size of the real launcher window, so previews are rendered at true scale and then shrunk. */
@@ -95,7 +101,10 @@ fun ScaledScreen(screen: IntSize, scale: Float, modifier: Modifier = Modifier, c
 /** Provides the draft document to launcher renderers and disables every launcher action. */
 @Composable
 fun PreviewLocals(doc: LauncherDocument, mode: RenderMode = RenderMode.PREVIEW, content: @Composable () -> Unit) {
+    val layer = rememberGraphicsLayer()
+    val backdrops = remember(layer) { Backdrops(background = BackdropLayer(layer)) }
     CompositionLocalProvider(
+        LocalBackdrops provides backdrops,
         LocalFlyerConfig provides doc.config,
         LocalAppOverrides provides doc.layout.appOverrides,
         LocalRenderMode provides mode,
@@ -153,8 +162,9 @@ fun WallpaperBackdrop(modifier: Modifier = Modifier) {
 /** The background exactly as the launcher draws it, with a wallpaper stand-in where needed. */
 @Composable
 fun PreviewBackground(config: FlyerConfig) {
+    // The wallpaper stand-in is not recorded: on a real device glass can't see the system wallpaper either.
     if (config.home.background.type == BackgroundType.SYSTEM_WALLPAPER) WallpaperBackdrop()
-    HomeBackground(config.home.background)
+    HomeBackground(config.home.background, Modifier.recordBackdrop(LocalBackdrops.current.background))
 }
 
 /** Static home screen: the same frame, surfaces and visuals as the live launcher. */
@@ -188,7 +198,7 @@ fun StaticDock(config: FlyerConfig, layout: HomeLayout, vertical: Boolean, modif
     val density = LocalDensity.current
     val cellPx = with(density) { (iconSize + 12.dp).toPx() }
     val cellH = with(density) { (config.dock.thicknessDp - 2 * config.dock.marginDp).dp.toPx() }
-    DockContainer(config, vertical, modifier, backdrop = rememberDockBackdrop(config)) {
+    DockContainer(config, vertical, modifier) {
         layout.dock.sortedBy { it.cell.x }.forEach { item ->
             key(item.id) {
                 Box(Modifier.size(with(density) { cellPx.toDp() }, with(density) { cellH.toDp() }), contentAlignment = Alignment.Center) {
@@ -200,7 +210,7 @@ fun StaticDock(config: FlyerConfig, layout: HomeLayout, vertical: Boolean, modif
 }
 
 /** Kind of preview shown at the top of a Flyer category. */
-enum class PreviewKind { HOME, DRAWER, FOLDER, DESKTOP, NONE }
+enum class PreviewKind { HOME, DRAWER, FOLDER, DESKTOP, LOCK, NONE }
 
 /** A complete, scaled preview of one launcher surface for the given draft. */
 @Composable
@@ -230,6 +240,13 @@ fun SurfacePreview(
                         FolderPopup(null, folder, null, interactive = false, asWindow = false, onDismiss = {})
                     }
                     PreviewKind.DESKTOP -> DesktopPreview(doc.config, doc.layout, insets)
+                    PreviewKind.LOCK -> {
+                        val blur = doc.config.lock.blurDp
+                        Box(Modifier.fillMaxSize().let { if (blur > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) it.blur(blur.dp) else it }) {
+                            StaticHome(doc.config, doc.layout, 0, insets)
+                        }
+                        com.flyer.launcher.launcher.lock.LockOverlay(null, com.flyer.launcher.core.lock.LockState(locked = true))
+                    }
                 }
             }
         }

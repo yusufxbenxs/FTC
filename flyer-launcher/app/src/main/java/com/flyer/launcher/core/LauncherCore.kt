@@ -77,6 +77,8 @@ class LauncherCore(val app: Application) : LauncherApi {
     val icons = IconEngine(app, appsEngine, iconPacks)
     val widgets = WidgetEngine(app)
     val gestures = GestureEngine(app)
+    val lock = com.flyer.launcher.core.lock.LockEngine(app, scope)
+    val importer = com.flyer.launcher.core.apps.LayoutImporter(app, appsEngine)
 
     override val traits: DeviceTraits = run {
         val am = app.getSystemService(ActivityManager::class.java)
@@ -226,6 +228,18 @@ class LauncherCore(val app: Application) : LauncherApi {
 
     // Initialization runs last so every property above is ready before the first commit.
     init {
+        // Screen off: forget recent unlocks and, if enabled, lock the launcher.
+        val screenOff = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+                lock.clearAuthorization()
+                if (config.value.lock.lockOnScreenOff) scope.launch { lock.lock() }
+            }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            app, screenOff, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+
         scope.launch {
             val loaded = runCatching { persistence.load() }.onFailure { Log.e("LauncherCore", "load", it) }.getOrDefault(LauncherDocument())
             val tuned = if (!loaded.layout.initialized) tuneForDevice(loaded) else loaded

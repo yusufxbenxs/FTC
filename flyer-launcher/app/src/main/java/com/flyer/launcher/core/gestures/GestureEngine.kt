@@ -38,7 +38,8 @@ object GestureCatalog {
         ActionType.HOME_MENU -> "Show home menu"
         ActionType.EXPAND_NOTIFICATIONS -> "Notifications"
         ActionType.QUICK_SETTINGS -> "Quick settings"
-        ActionType.LOCK_SCREEN -> "Lock screen"
+        ActionType.LOCK_SCREEN -> "Lock the phone"
+        ActionType.LOCK_LAUNCHER -> "Lock the home screen"
         ActionType.RECENT_APPS -> "Recent apps"
         ActionType.SCREENSHOT -> "Take screenshot"
         ActionType.LAUNCH_APP -> "Launch an app"
@@ -51,13 +52,13 @@ object GestureCatalog {
     }
 
     /** Actions that need the optional accessibility helper because launchers cannot do them directly. */
-    fun needsAccessibility(a: ActionType) = a in setOf(ActionType.LOCK_SCREEN, ActionType.RECENT_APPS, ActionType.SCREENSHOT)
+    fun needsAccessibility(a: ActionType) = a in setOf(ActionType.RECENT_APPS, ActionType.SCREENSHOT)
 
     /** False for helper-only actions in builds that don't include the helper. */
     fun availableInBuild(a: ActionType) = !needsAccessibility(a) || GestureHelperBridge.includedInBuild
 
     fun minSdk(a: ActionType) = when (a) {
-        ActionType.LOCK_SCREEN, ActionType.SCREENSHOT -> Build.VERSION_CODES.P
+        ActionType.SCREENSHOT -> Build.VERSION_CODES.P
         else -> Build.VERSION_CODES.O
     }
 }

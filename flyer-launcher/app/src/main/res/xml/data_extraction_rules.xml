@@ -2,11 +2,13 @@
 <data-extraction-rules>
     <cloud-backup>
         <include domain="file" path="datastore/" />
+        <exclude domain="file" path="datastore/security.preferences_pb" />
         <include domain="file" path="snapshots/" />
         <include domain="file" path="media/" />
     </cloud-backup>
     <device-transfer>
         <include domain="file" path="datastore/" />
+        <exclude domain="file" path="datastore/security.preferences_pb" />
         <include domain="file" path="snapshots/" />
         <include domain="file" path="media/" />
     </device-transfer>

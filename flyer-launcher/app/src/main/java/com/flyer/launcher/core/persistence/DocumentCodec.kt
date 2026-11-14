@@ -111,6 +111,8 @@ object DocumentCodec {
             search = section("search", serializer(), defaults.search),
             performance = section("performance", serializer(), defaults.performance),
             advanced = section("advanced", serializer(), defaults.advanced),
+            style = section("style", serializer(), defaults.style),
+            lock = section("lock", serializer(), defaults.lock),
         )
     }
 

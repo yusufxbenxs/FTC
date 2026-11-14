@@ -1,6 +1,6 @@
 # Flyer Launcher
 
-An Android home-screen launcher whose built-in customization environment, **Flyer**, controls everything the launcher owns: grid, icons, dock, drawer, folders, widgets, gestures, animations, appearance, typography and a desktop mode. Flyer also includes a visual live editor, themes, and backup and restore.
+An Android home-screen launcher whose built-in customization environment, **Flyer**, controls everything the launcher owns: grid, icons, dock, drawer, folders, widgets, gestures, animations, appearance, typography and a desktop mode. Flyer also includes a visual live editor, themes (including liquid glass and animated backgrounds), a home-screen lock, a tool that copies your old launcher's layout, and backup and restore.
 
 Flyer is **not** a separate app or a second launcher. It is a subsystem of the launcher and opens inside the launcher's own (and only) HOME activity. It shows up as the built-in **Flyer** app icon on the home screen and in the app drawer.
 
@@ -8,24 +8,28 @@ Flyer is **not** a separate app or a second launcher. It is a subsystem of the l
 |---|---|---|---|
 | ![](docs/screenshots/01-home.png) | ![](docs/screenshots/10-flyer-dashboard.png) | ![](docs/screenshots/40-flyer-live-editor.png) | ![](docs/screenshots/12-flyer-icons.png) |
 
-| Themes | Folder (made by drag & drop) | Desktop mode | Home menu |
+| Advanced themes | Liquid Glass theme | Materials & Effects | Lock |
 |---|---|---|---|
-| ![](docs/screenshots/23-flyer-themes.png) | ![](docs/screenshots/71-folder-open.png) | ![](docs/screenshots/61-desktop-start-menu.png) | ![](docs/screenshots/04-home-menu.png) |
+| ![](docs/screenshots/99a-flyer-themes.png) | ![](docs/screenshots/90c-liquid-glass-menu.png) | ![](docs/screenshots/99b-flyer-materials.png) | ![](docs/screenshots/81-locked.png) |
 
-*These screenshots are rendered by the Robolectric UI tests, so there is no system wallpaper and no installed apps, only the built-in ones.*
+| Cyber Neon theme | Folder (made by drag & drop) | Desktop mode | Lock settings |
+|---|---|---|---|
+| ![](docs/screenshots/96-theme-cyber-neon.png) | ![](docs/screenshots/71-folder-open.png) | ![](docs/screenshots/61-desktop-start-menu.png) | ![](docs/screenshots/99c-flyer-lock.png) |
+
+*These screenshots are rendered by the Robolectric UI tests with software rendering. There is no system wallpaper and no installed apps, only the built-in ones. Blur, glass refraction and the aurora shader need GPU rendering, so they show their fallback look here.*
 
 ---
 
 ## Install
 
-Download **`dist/FlyerLauncher-1.0.1.apk`**. It needs Android 8.0 (API 26) or newer, and you have two options:
+Download **`dist/FlyerLauncher-1.1.0.apk`**. It needs Android 8.0 (API 26) or newer, and you have two options:
 
 | File | Use it when |
 |---|---|
-| `FlyerLauncher-1.0.1.apk` | **Recommended.** The standard build: no accessibility service and no "see all apps" permission, so Play Protect doesn't block it. |
-| `FlyerLauncher-1.0.1-full.apk` | You also want the *Lock screen*, *Recent apps* and *Screenshot* gestures. These need an accessibility helper, and Play Protect blocks most sideloaded apps that include one. |
+| `FlyerLauncher-1.1.0.apk` | **Recommended.** The standard build: no accessibility service and no "see all apps" permission, so Play Protect doesn't block it. Everything below works in it, including locking the real phone. |
+| `FlyerLauncher-1.1.0-full.apk` | You also want the *Recent apps* and *Screenshot* gestures. These need an accessibility helper, and Play Protect blocks most sideloaded apps that include one. |
 
-1. Open the APK on the phone, or run `adb install dist/FlyerLauncher-1.0.1.apk`.
+1. Open the APK on the phone, or run `adb install -r dist/FlyerLauncher-1.1.0.apk`. It installs over 1.0.x and keeps your setup.
 2. **If Play Protect shows a warning** (normal for any app that isn't from the Play Store):
    * Tap **More details → Install anyway**.
    * If the dialog has no "Install anyway" button: open the **Play Store → your profile picture → Play Protect → ⚙ settings**, turn off **Scan apps with Play Protect**, install the APK, then turn scanning back on.
@@ -38,6 +42,8 @@ Download **`dist/FlyerLauncher-1.0.1.apk`**. It needs Android 8.0 (API 26) or ne
 
 The standard and full builds are signed with the same key, so you can switch between them without uninstalling. A build you compile yourself with a different key needs an uninstall first, so export your setup in **Flyer → Backup & Restore** beforehand.
 
+**Uninstalling:** if you allowed "Lock the phone" (device admin), turn it off first in **Flyer → Lock → Phone lock → Turn off**. Android won't uninstall an active device admin.
+
 ## Opening Flyer
 
 There are several ways in, and they are deliberately redundant:
@@ -48,7 +54,7 @@ There are several ways in, and they are deliberately redundant:
 * Search for any setting name in the launcher search.
 * Use the keyboard: **Ctrl + ,** opens Flyer and **Ctrl + E** opens the editor.
 
-Removing the Flyer shortcut never uninstalls or disables Flyer. **Flyer → Advanced → Built-in apps** restores it.
+The built-in Flyer apps can't be removed or hidden. Their menus have no Remove entry, and the drag-to-remove target refuses them. Deleting a page or folder that holds one moves it somewhere else, and the layout validator puts the Flyer icon back if a restored backup lacks it. You can still move them anywhere, including into folders or the dock.
 
 ## Build
 
@@ -60,7 +66,7 @@ echo "sdk.dir=/path/to/Android/sdk" > local.properties
 ./gradlew assembleStandardRelease   # app/build/outputs/apk/standard/release/ (R8-minified, ~2 MB)
 ./gradlew assembleFullRelease       # same, plus the optional accessibility gesture helper
 ./gradlew assembleStandardDebug     # debug build (package com.flyer.launcher.debug)
-./gradlew testStandardDebugUnitTest # 41 tests: engines + Robolectric UI tests (screenshots → app/build/flyer-screenshots)
+./gradlew testStandardDebugUnitTest # 54 tests: engines + Robolectric UI tests (screenshots → app/build/flyer-screenshots)
 ```
 
 Release builds are signed with the key described in `keystore.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; git-ignored). Without that file they fall back to your local debug key.
@@ -82,9 +88,13 @@ Launcher Core  (core/LauncherCore.kt: one per process, owned by FlyerApp)
 ├── Widget Engine        core/widgets       AppWidgetHost, bind/configure/delete, size options, span limits,
 │                                           long-press-aware host views
 ├── Gesture Engine       core/gestures      gesture→action bindings, system actions, optional accessibility helper
-├── Theme Engine         core/theme         color schemes (incl. Material You), fonts, motion specs, theme presets
+├── Theme Engine         core/theme         color schemes (incl. Material You), fonts, motion specs, classic + advanced presets
 ├── Rendering Engine     core/render        icon shapes, adaptive/themed/legacy icon rendering, byte-bounded LRU cache
 │                        launcher/render    grid geometry + shared visuals (tiles, folders, widgets, built-in widgets)
+│   └── Materials        launcher/render/materials   backdrop recording, AGSL glass/aurora shaders, MaterialSurface,
+│                                           animated backgrounds (frame-capped effect clock)
+├── Lock Engine          core/lock          lock state, PBKDF2 launcher PIN/password, lockout, device-admin phone lock
+├── Layout Importer      core/apps/LayoutImporter.kt   reads another launcher's favorites or its factory layout XML
 ├── Persistence Engine   core/persistence   DataStore document, JSON codec, migrations, snapshots, media import
 └── Flyer                flyer/             (talks to the launcher only through LauncherApi)
     ├── Dashboard            screens/DashboardScreen.kt
@@ -100,6 +110,10 @@ Launcher Core  (core/LauncherCore.kt: one per process, owned by FlyerApp)
 **A single source of truth.** Every visual or behavioural property lives in one immutable, versioned `FlyerConfig` (`core/config/FlyerConfig.kt`). The arrangement lives in `HomeLayout` (`core/model/LayoutModel.kt`). Launcher components hardcode no visual values; they read the config from the composition.
 
 **Flyer edits a draft.** `FlyerSession` holds a draft document with a bounded undo/redo history. Slider drags are coalesced into a single undo step. Previews render the draft with the *same composables* the launcher uses, scaled down by `ScaledScreen`. **Apply** validates the draft and commits it through `LauncherApi.commit`. The "Apply changes instantly" option commits every edit as it happens.
+
+**Materials are real backdrops.** The launcher records its background, and the whole home screen, into GraphicsLayers. A glass surface redraws exactly what is behind it, then blurs it (`RenderEffect`, Android 12+) and bends it at the rim with an AGSL shader (Android 13+): edge refraction, chromatic aberration, a specular highlight and a light angle. Older Android versions get a frosted tint with the same rim and highlight. The dock, folders, drawer, menus, search bar, widgets, taskbar and lock screen each opt in separately.
+
+**The lock.** The lock covers the live home screen. Every touch is consumed, Back does nothing, Flyer is hidden and the Home key, keyboard shortcuts and pin requests are ignored. A launcher PIN or password is stored only as a salted PBKDF2-SHA256 hash, in a separate DataStore that is excluded from backups and device transfers. Wrong attempts trigger growing lockouts (30 s doubling up to 30 min). The phone's own credential is checked with `BiometricPrompt` (fingerprint/face/PIN/pattern), or with the system confirm-credential screen on Android 9 and older. Holding the lock button calls `DevicePolicyManager.lockNow()`, which needs the opt-in device-admin permission. That permission only allows "lock the screen".
 
 **Settings are declarative.** Each of the roughly 200 settings is one `SettingSpec`: a lens into the config, plus control type, range, category, section, the editor elements it styles, its level (basic or advanced) and an optional limitation note. Category screens, settings search, the inspector, per-setting resets and per-category resets are all generated from `SettingsRegistry`. To add a module, add a `FlyerCategory` entry and its specs.
 
@@ -117,21 +131,23 @@ Launcher Core  (core/LauncherCore.kt: one per process, owned by FlyerApp)
 
 | Module | Highlights |
 |---|---|
-| Home Screen | Grid columns/rows, grid or free positioning (with snap step and optional overlap), fill or fixed cell height plus alignment, margins, spacing, pages (add, reorder, delete, default page), infinite scroll, page indicator style/color/position, background (system wallpaper with parallax, solid, gradient, or image with blur), dim scrim, status/navigation bar visibility and icon color, layout lock |
+| Home Screen | **Copy original home screen layout** (pages, dock, folders and widget placeholders from your previous launcher), grid columns/rows, grid or free positioning (with snap step and optional overlap), fill or fixed cell height plus alignment, margins, spacing, pages (add, reorder, delete, default page), infinite scroll, page indicator style/color/position, background (system wallpaper with parallax, solid, gradient, image with blur, mesh gradient, or animated: aurora, liquid, particles, waves, with palette, speed and density), dim scrim, status/navigation bar visibility and icon color, layout lock |
 | Layout Editor | Live canvas of the real home screen and desktop. Select icons, folders, widgets, dock, indicator, search bar or workspace. Drag with grid snapping or free positioning with alignment guides, resize widgets within provider limits, add apps/folders/widgets, move between pages/dock/desktop, per-element inspector, reset element, undo/redo |
 | Icons | Size, 9 shapes (incl. squircle, teardrop, hexagon, pebble, clover) with corner control, inset, reshaping legacy icons, themed monochrome icons (Android 13+), work-profile badges, opacity, saturation/grayscale, shadow, border, press effect, label style (show, color, size, weight, lines, shadow, uppercase, gap), ADW/Nova icon packs, per-app label and icon (pack icon, image, or another app's icon) |
 | Dock | Show/hide, position (bottom/top/left/right), slots, alignment, spacing, icon size, labels, height, width (floating dock), margins, color, opacity, corner radius, backdrop blur, border, contents manager |
 | App Drawer | Grid or list, columns, icon size, spacing, padding, labels, sort (A–Z, Z–A, most used, recently installed/updated), recent row, category tabs, your own groups as tabs, work-app tab, alphabet fast scroller, search placement and keyboard, background color/opacity/blur/corners, open animation, hidden apps |
 | Widgets | Native AppWidgets (bind, configure, reconfigure, resize within limits, restore after import), container padding/corners/clipping/background, built-in launcher widgets: Clock (digital/stacked/analog, 24h, seconds, date format, color, size, weight), Date, Search bar, Flyer quick panel |
 | Folders | Preview style, shape, color, opacity, popup or full screen, columns, visible rows, background/opacity/corners/blur, open animation, title and label styling, per-folder overrides (name, color, shape, preview, columns, app order) |
-| Gestures | Swipe up/down, double tap, empty-space long press, pinch in/out, two-finger swipes, Home button while on home, swipe up on dock. Each maps to any of 18 actions (drawer, search, Flyer, editor, notifications, quick settings, lock, recents, screenshot, launch app, desktop toggle, theme toggle, page navigation, add widget). Sensitivity and haptics are adjustable |
+| Gestures | Swipe up/down, double tap, empty-space long press, pinch in/out, two-finger swipes, Home button while on home, swipe up on dock. Each maps to any of 19 actions (drawer, search, Flyer, editor, notifications, quick settings, lock the phone, lock the launcher, recents, screenshot, launch app, desktop toggle, theme toggle, page navigation, add widget). Sensitivity and haptics are adjustable |
 | Animations | On/off, follow the system setting, duration scale, easing (incl. spring and bouncy), page transitions (slide, fade, depth, cube, stack, zoom, rotate), app-opening animation, press-shrink amount, home entrance animation |
 | Appearance | Theme mode, Material You, accent color, high-contrast text, menu color/opacity, corner roundness |
 | Typography | System/sans/serif/mono/condensed/medium fonts, or import your own .ttf/.otf, text scale, letter spacing, use the launcher font inside Flyer |
 | Desktop Mode | Off / on / automatic (pointer device and ≥600 dp). Free-form desktop with draggable icons and widgets, taskbar (pins, clock, labels, position, color), start menu panel, folders as draggable windows, hover states, right-click menus, double-click option, keyboard shortcuts, auto-arrange. Desktop and mobile layouts are stored separately |
 | Search | Home search bar position and style; sources: apps, app shortcuts, Flyer settings, web; fuzzy matching; result count |
-| Themes | 7 built-in presets and your saved themes. Themes change looks only (never your arrangement or behaviour). Export/import theme files |
-| Performance | Effects level (full/balanced/minimal), blur on/off, low-memory mode, icon cache size, icon render resolution, background icon prefetch, background widget updates, cache and usage reset. Low-RAM devices start in minimal mode |
+| Themes | **Advanced themes**: Liquid Glass, Clear Glass, Aurora, Holographic, Soft UI, Clay, Cyber Neon, Lava and Starfield. Each sets a material, an animated or mesh background and matching colours. 7 classic presets and your saved themes. Themes change looks only (never your arrangement, behaviour or lock). Export/import theme files |
+| Materials & Effects | Surface material for the whole launcher: flat, frosted, **liquid glass**, holographic, neumorphic (soft UI), clay, neon or outline, with a live gallery. Frost, refraction, glass thickness, chromatic aberration, highlight, light angle, tint, grain, glow colour/radius/pulse, depth, holo speed, icon glass plates, clear (glyph) icons, and where it applies (dock, folders, drawer, menus, search, widgets, taskbar, lock) |
+| Lock | Lock button (corner, size, margin, opacity, icon), **tap to lock the home screen** and **hold to lock the phone** (hold time). Unlock with the phone's own lock (fingerprint/face/PIN), a launcher-only PIN or password, or a tap. Clock/date/battery/next-alarm, an away message, blur, dim, clock size, max attempts, lock when the screen turns off, protect Flyer and chosen apps with the unlock |
+| Performance | Effects level (full/balanced/minimal), animated-effect frame rate, blur on/off, low-memory mode, icon cache size, icon render resolution, background icon prefetch, background widget updates, cache and usage reset. Low-RAM devices start in minimal mode |
 | Advanced | Orientation, Home closes Flyer, apply instantly, advanced settings, removal confirmations, hidden apps in search, add new apps to home, undo history length, layout bounds overlay, default-home and accessibility helper status, built-in apps manager, rebuild layout, reset everything |
 | Backup & Restore | Export or import a full setup as JSON (Storage Access Framework). Imports load as a reviewable draft. On-device snapshots |
 
@@ -142,7 +158,11 @@ Flyer has full authority over what the launcher owns, and only that. It requests
 | Wanted | Platform reality | What Flyer does |
 |---|---|---|
 | Swipe down for notifications or quick settings | No public API | Calls `StatusBarManager.expand*Panel` (the long-standing launcher approach, using the normal `EXPAND_STATUS_BAR` permission). If that is unavailable, the full build falls back to the accessibility helper |
-| Lock screen, recents, screenshot | Only accessibility services can trigger these, and Play Protect blocks sideloaded apps that include one | Available only in the **full** build, through the optional "Flyer Launcher gestures" helper. It performs only these global actions and reads no content. The standard build hides these actions |
+| Locking the real phone | Apps need device admin ("force lock") or an accessibility service | Both builds: opt-in device admin with only the force-lock policy (**Flyer → Lock → Allow**). The full build can use its accessibility helper instead |
+| Recents, screenshot | Only accessibility services can trigger these, and Play Protect blocks sideloaded apps that include one | Available only in the **full** build, through the optional "Flyer Launcher gestures" helper. It performs only these global actions and reads no content. The standard build hides these actions |
+| The launcher lock as a security boundary | A launcher is an ordinary app. It can't block the notification shade, recents, the power menu or apps opened from notifications | The lock keeps the *home screen* and Flyer unusable. For real security, hold the button to lock the phone. "Protect Flyer" and protected apps ask for the unlock only when opened from this launcher |
+| Glass that refracts the system wallpaper | Apps can't read the system wallpaper's pixels | Glass refracts everything the launcher draws: its own backgrounds (mesh, aurora, image…) and the home screen. Over the system wallpaper it falls back to a frosted tint. Advanced themes set a launcher-drawn background for that reason |
+| Copying another launcher's current layout | Its database is usually protected by a signature permission | Flyer asks for the read permission and uses the live layout when allowed (some AOSP-based launchers). Otherwise it rebuilds the launcher's factory layout from its own resources. Widgets come back as "tap to restore" placeholders. You review the result as a draft before applying |
 | Seeing every installed app | `QUERY_ALL_PACKAGES` is a restricted permission | Not requested. Manifest `<queries>` for launcher activities, icon packs and widget providers cover everything a launcher needs |
 | Blur behind dock or panels with the system wallpaper | Apps can't read or blur part of the system wallpaper | Window blur-behind for drawer and folders (Android 12+, when the device allows cross-window blur). Dock backdrop blur when the background is drawn by the launcher (Home Screen → Background) |
 | Showing your real wallpaper in Flyer previews | Reading the wallpaper needs privileged access on modern Android | Uses the real image when allowed, otherwise a gradient built from the wallpaper's own colors |
@@ -154,10 +174,13 @@ Flyer has full authority over what the launcher owns, and only that. It requests
 
 ## Tests
 
-* **Engines** (`WorkspaceEngineTest`, `ConfigAndPersistenceTest`, `MiscLogicTest`): drag and drop rules, folders, dock, pages, validators, codec robustness, migrations, history coalescing, fuzzy search, grid geometry, widget resizing, settings-registry consistency, and checking that themes don't touch arrangement or behaviour.
+* **Engines** (`WorkspaceEngineTest`, `ConfigAndPersistenceTest`, `MiscLogicTest`, `LockAndProtectionTest`): drag and drop rules, folders, dock, pages, validators, codec robustness, migrations, history coalescing, fuzzy search, grid geometry, widget resizing, settings-registry consistency, and checking that themes don't touch arrangement, behaviour or the lock. Also covers PIN hashing and lockouts, unremovable built-in apps (remove, folder delete, page delete, validator) and the style/lock sections.
 * **UI** (`UiSmokeTest`, Robolectric with native graphics) launches the real HOME activity and:
   * renders home, drawer, search, the home menu, all 17 Flyer modules, the live editor, the app editor, the widget picker and desktop mode;
   * runs edit → undo → redo → apply;
   * performs a real long-press drag of an icon;
   * creates a folder by dropping one app onto another;
-  * drags in the live editor and checks that only the draft changes.
+  * drags in the live editor and checks that only the draft changes;
+  * locks with the corner button, checks the home screen ignores taps, enters a wrong then a right PIN;
+  * renders all 9 advanced themes on the home screen (and the Liquid Glass drawer and menu), plus the copy-layout dialog;
+  * checks the Flyer icon has no Remove entry.

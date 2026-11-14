@@ -204,7 +204,9 @@ private fun ItemActions(
                     Icon(Icons.Outlined.Brush, null); Spacer(Modifier.width(6.dp)); Text("Icon & label…")
                 }
             }
-            OutlinedButton(onClick = { session.updateLayout("Remove") { WorkspaceEngine.removeItem(it, item.id) }; onSelect(null) }) {
+            if (WorkspaceEngine.isProtected(item)) {
+                Text("Built-in Flyer app · can't be removed", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else OutlinedButton(onClick = { session.updateLayout("Remove") { WorkspaceEngine.removeItem(it, item.id) }; onSelect(null) }) {
                 Icon(Icons.Outlined.Delete, null); Spacer(Modifier.width(6.dp)); Text("Remove")
             }
         }
@@ -333,7 +335,10 @@ private fun FolderProperties(session: FlyerSession, folder: FolderItem) {
             Text(session.draft.layout.appOverrides[key]?.label ?: key.substringAfter('/').substringBefore('@').substringAfterLast('.'), modifier = Modifier.weight(1f))
             IconButton(onClick = { session.updateLayout("Reorder folder") { WorkspaceEngine.reorderInFolder(it, folder.id, i, i - 1) } }, enabled = i > 0) { Icon(Icons.Outlined.ArrowUpward, "Move up") }
             IconButton(onClick = { session.updateLayout("Reorder folder") { WorkspaceEngine.reorderInFolder(it, folder.id, i, i + 1) } }, enabled = i < folder.apps.lastIndex) { Icon(Icons.Outlined.ArrowDownward, "Move down") }
-            IconButton(onClick = { session.updateLayout("Remove from folder") { WorkspaceEngine.updateFolderApps(it, folder.id, folder.apps - key) } }) { Icon(Icons.Outlined.Remove, "Remove from folder") }
+            IconButton(
+                onClick = { session.updateLayout("Remove from folder") { WorkspaceEngine.updateFolderApps(it, folder.id, folder.apps - key) } },
+                enabled = !WorkspaceEngine.isProtectedKey(key),
+            ) { Icon(Icons.Outlined.Remove, "Remove from folder") }
         }
     }
 }

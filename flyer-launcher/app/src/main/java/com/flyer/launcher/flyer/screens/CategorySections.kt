@@ -77,7 +77,7 @@ import java.io.File
 @Composable
 fun CategoryCustomSection(controller: FlyerController, session: FlyerSession, core: LauncherCore, apps: List<AppEntry>, category: FlyerCategory) {
     when (category) {
-        FlyerCategory.HOME -> { PagesManager(session); BackgroundImageSection(session, core) }
+        FlyerCategory.HOME -> { CopyOriginalLayoutCard(session, core); PagesManager(session); BackgroundImageSection(session, core) }
         FlyerCategory.ICONS -> { IconPackSection(session, core); PerAppIconsSection(controller, apps) }
         FlyerCategory.DOCK -> DockContentsSection(session, apps)
         FlyerCategory.DRAWER -> { HiddenAppsSection(session, apps); DrawerGroupsSection(session, apps) }
@@ -87,6 +87,8 @@ fun CategoryCustomSection(controller: FlyerController, session: FlyerSession, co
         FlyerCategory.TYPOGRAPHY -> FontImportSection(session, core)
         FlyerCategory.DESKTOP -> TaskbarPinsSection(session, apps)
         FlyerCategory.THEMES -> ThemesSection(session, core)
+        FlyerCategory.MATERIALS -> MaterialGallery(session)
+        FlyerCategory.LOCK -> LockSection(session, core, apps)
         FlyerCategory.PERFORMANCE -> PerformanceSection(core)
         FlyerCategory.ADVANCED -> AdvancedSection(session, core)
         FlyerCategory.BACKUP -> BackupSection(session, core)
@@ -121,7 +123,7 @@ private fun PagesManager(session: FlyerSession) {
                     onClick = {
                         session.update("Delete page") { doc ->
                             val newDefault = doc.config.home.defaultPage.let { d -> if (d >= i && d > 0) d - 1 else d }
-                            doc.copy(layout = WorkspaceEngine.removePage(doc.layout, i), config = doc.config.copy(home = doc.config.home.copy(defaultPage = newDefault)))
+                            doc.copy(layout = WorkspaceEngine.removePage(doc.layout, i, doc.config), config = doc.config.copy(home = doc.config.home.copy(defaultPage = newDefault)))
                         }
                     },
                     enabled = layout.pages.size > 1,
@@ -230,7 +232,9 @@ private fun DockContentsSection(session: FlyerSession, apps: List<AppEntry>) {
                 )
                 IconButton(onClick = { session.updateLayout("Move in dock") { l -> l.copy(dock = swapDock(l.dock, i, i - 1)) } }, enabled = i > 0) { Icon(Icons.Outlined.ArrowUpward, "Move left") }
                 IconButton(onClick = { session.updateLayout("Move in dock") { l -> l.copy(dock = swapDock(l.dock, i, i + 1)) } }, enabled = i < dock.lastIndex) { Icon(Icons.Outlined.ArrowDownward, "Move right") }
-                IconButton(onClick = { session.updateLayout("Remove from dock") { WorkspaceEngine.removeItem(it, item.id) } }) { Icon(Icons.Outlined.Delete, "Remove") }
+                IconButton(onClick = { session.updateLayout("Remove from dock") { WorkspaceEngine.removeItem(it, item.id) } }, enabled = !WorkspaceEngine.isProtected(item)) {
+                    Icon(Icons.Outlined.Delete, "Remove")
+                }
             }
         }
     }
@@ -266,7 +270,7 @@ private fun HiddenAppsSection(session: FlyerSession, apps: List<AppEntry>) {
             }
         }
     }
-    if (picking) AppPickerDialog("Hide apps", apps.filter { it.builtIn != BuiltInApp.FLYER }, onDismiss = { picking = false }, multiSelect = hidden) { app ->
+    if (picking) AppPickerDialog("Hide apps", apps.filter { it.builtIn == null }, onDismiss = { picking = false }, multiSelect = hidden) { app ->
         session.updateLayout("Toggle hidden ${app.label}") { l -> l.copy(hiddenApps = if (app.key in l.hiddenApps) l.hiddenApps - app.key else l.hiddenApps + app.key) }
     }
 }
@@ -466,7 +470,7 @@ private fun AdvancedSection(session: FlyerSession, core: LauncherCore) {
     SectionHeader("Built-in apps")
     FlyerCard(Modifier.padding(horizontal = 16.dp)) {
         Text(
-            "Built-in apps are part of the launcher. Removing their shortcut never removes the app: Flyer is always in the app drawer and in the home screen's long-press menu.",
+            "Built-in apps are part of the launcher and can't be removed or hidden. Flyer always stays on your home screen; Layout Editor and Widgets can be added and moved anywhere.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp),
         )
         BuiltInApp.entries.forEach { b ->
@@ -479,9 +483,7 @@ private fun AdvancedSection(session: FlyerSession, core: LauncherCore) {
                     Text(if (placed) "On your home screen" else b.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (placed) {
-                    OutlinedButton(onClick = {
-                        session.updateLayout("Remove ${b.label} shortcut") { l -> WorkspaceEngine.removeApp(l, b.key) }
-                    }) { Text("Remove") }
+                    Text("Built in", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 } else {
                     Button(onClick = {
                         session.update("Restore ${b.label} shortcut") { doc -> doc.copy(layout = WorkspaceEngine.addApp(doc.layout, b.key, doc.config)) }

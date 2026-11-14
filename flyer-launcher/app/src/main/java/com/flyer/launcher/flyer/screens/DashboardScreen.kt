@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
@@ -43,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +77,9 @@ fun DashboardScreen(controller: FlyerController, session: FlyerSession, apps: Li
     val isDefault = remember { platform.isDefaultLauncher() }
     val insets = WindowInsets.systemBars.asPaddingValues()
     var page by remember { mutableIntStateOf(0) }
+    var copyLayout by remember { mutableStateOf(false) }
+    val core = com.flyer.launcher.launcher.render.LocalLauncherCore.current
+    if (copyLayout) CopyOriginalLayoutDialog(session, core) { copyLayout = false }
     val items = doc.layout.pages.flatMap { it.items } + doc.layout.dock
     LazyVerticalGrid(
         columns = GridCells.Adaptive(170.dp),
@@ -132,6 +137,7 @@ fun DashboardScreen(controller: FlyerController, session: FlyerSession, apps: Li
                 QuickAction(Icons.Outlined.Widgets, "Add widget") { controller.navigate(FlyerRoute.WidgetPicker) }
                 QuickAction(Icons.Outlined.Backup, "Backup") { controller.navigate(FlyerRoute.Category(FlyerCategory.BACKUP)) }
                 QuickAction(Icons.Outlined.Search, "Find a setting") { controller.navigate(FlyerRoute.Search) }
+                QuickAction(Icons.Outlined.ContentCopy, "Copy original layout") { copyLayout = true }
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }) { SectionHeader("Customize", Modifier.padding(start = 0.dp)) }

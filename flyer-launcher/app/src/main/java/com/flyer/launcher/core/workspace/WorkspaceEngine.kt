@@ -143,13 +143,32 @@ object WorkspaceEngine {
         return mapSurface(layout, surface) { items -> items.map { if (it.id == id) transform(it) else it } }
     }
 
-    fun removeItem(layout: HomeLayout, id: String): HomeLayout {
+    // ───────────── Built-in (Flyer) apps are never removable ─────────────
+
+    fun isProtectedKey(key: String) = key.startsWith("builtin:")
+
+    fun isProtected(item: WorkspaceItem) = item is AppItem && isProtectedKey(item.appKey)
+
+    /** Takes an item off its surface so it can be placed elsewhere (moves; not a user removal). */
+    private fun detach(layout: HomeLayout, id: String): HomeLayout {
         val (surface, _) = find(layout, id) ?: return layout
         return mapSurface(layout, surface) { items -> items.filterNot { it.id == id } }
     }
 
-    /** Removes every occurrence of an app (used when a package is uninstalled). */
+    /** Removing a built-in app is refused; removing a folder keeps the built-in apps it contained. */
+    fun removeItem(layout: HomeLayout, id: String): HomeLayout {
+        val (surface, item) = find(layout, id) ?: return layout
+        if (isProtected(item)) return layout
+        if (item is FolderItem && item.apps.any(::isProtectedKey)) {
+            val kept = normalizeFolder(item.copy(apps = item.apps.filter(::isProtectedKey)))
+            return mapSurface(layout, surface) { items -> items.mapNotNull { if (it.id == id) kept else it } }
+        }
+        return mapSurface(layout, surface) { items -> items.filterNot { it.id == id } }
+    }
+
+    /** Removes every occurrence of an app (used when a package is uninstalled; never for built-ins). */
     fun removeApp(layout: HomeLayout, appKey: String): HomeLayout {
+        if (isProtectedKey(appKey)) return layout
         fun clean(items: List<WorkspaceItem>): List<WorkspaceItem> = items.mapNotNull { item ->
             when (item) {
                 is AppItem -> item.takeIf { it.appKey != appKey }
@@ -218,7 +237,7 @@ object WorkspaceEngine {
         val (item, without) = when (placement) {
             is Placement.Existing -> {
                 val found = find(layout, placement.itemId) ?: return DropResult.Rejected("Item no longer exists")
-                found.second to removeItem(layout, placement.itemId)
+                found.second to detach(layout, placement.itemId)
             }
             is Placement.NewApp -> AppItem(appKey = placement.appKey) to layout
             is Placement.NewItem -> placement.item to layout
@@ -340,9 +359,20 @@ object WorkspaceEngine {
     fun addPage(layout: HomeLayout, at: Int = layout.pages.size): HomeLayout =
         layout.copy(pages = layout.pages.toMutableList().apply { add(at.coerceIn(0, size), HomePage()) })
 
-    fun removePage(layout: HomeLayout, index: Int): HomeLayout {
+    /** Deletes a page; built-in apps on it move to another page (refused without [config] to place them). */
+    fun removePage(layout: HomeLayout, index: Int, config: FlyerConfig? = null): HomeLayout {
         if (layout.pages.size <= 1 || index !in layout.pages.indices) return layout
-        return layout.copy(pages = layout.pages.filterIndexed { i, _ -> i != index })
+        val rescued = layout.pages[index].items.flatMap { item ->
+            when (item) {
+                is AppItem -> listOf(item.appKey).filter(::isProtectedKey)
+                is FolderItem -> item.apps.filter(::isProtectedKey)
+                else -> emptyList()
+            }
+        }
+        if (rescued.isNotEmpty() && config == null) return layout
+        var out = layout.copy(pages = layout.pages.filterIndexed { i, _ -> i != index })
+        rescued.forEach { key -> out = addApp(out, key, config!!) }
+        return out
     }
 
     fun movePage(layout: HomeLayout, from: Int, to: Int): HomeLayout {

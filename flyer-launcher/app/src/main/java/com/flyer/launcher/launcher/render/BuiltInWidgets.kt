@@ -1,11 +1,12 @@
 package com.flyer.launcher.launcher.render
 
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.MaterialSurface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -109,10 +110,10 @@ fun ClockWidget(modifier: Modifier, showTime: Boolean) {
     val textAlign = if (clock.alignStart) TextAlign.Start else TextAlign.Center
     val scale = config.typography.textScale
 
-    BoxWithConstraints(modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = if (clock.alignStart) Alignment.CenterStart else Alignment.Center) {
+    Box(modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = if (clock.alignStart) Alignment.CenterStart else Alignment.Center) {
         if (!showTime) {
             Text(date, style = TextStyle(color = clock.color.color, fontSize = (clock.sizeSp * 0.4f * scale).sp, fontFamily = font, shadow = shadow, textAlign = textAlign))
-            return@BoxWithConstraints
+            return@Box
         }
         when (clock.style) {
             ClockStyle.DIGITAL -> Column(horizontalAlignment = align) {
@@ -187,14 +188,22 @@ fun SearchBarWidget(modifier: Modifier) {
     val actions = LocalLauncherActions.current
     val shape = RoundedCornerShape(config.search.barCornerDp.dp)
     Box(modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+        MaterialSurface(
+            tint = config.search.barBackground.color,
+            cornerRadius = config.search.barCornerDp.dp,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = config.style.applyToSearch,
+            backdrop = LocalBackdrops.current.background,
+        ) {
         Row(
-            Modifier.fillMaxWidth().clip(shape).background(config.search.barBackground.color)
+            Modifier.fillMaxWidth().clip(shape)
                 .clickable { actions.openSearch() }.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Outlined.Search, null, tint = config.icons.label.color.color)
             Spacer(Modifier.width(12.dp))
             Text("Search apps, settings, web", color = config.icons.label.color.color.copy(alpha = 0.8f), fontSize = 15.sp, fontFamily = LocalLauncherFont.current)
+        }
         }
     }
 }
@@ -205,8 +214,15 @@ fun FlyerQuickPanel(modifier: Modifier) {
     val config = LocalFlyerConfig.current
     val actions = LocalLauncherActions.current
     val shape = RoundedCornerShape((20 * config.appearance.cornerScale).dp)
+    MaterialSurface(
+        tint = config.appearance.menuBackground.withOpacity(0.75f),
+        cornerRadius = (20 * config.appearance.cornerScale).dp,
+        modifier = modifier.fillMaxSize().padding(4.dp),
+        enabled = config.style.applyToMenus,
+        backdrop = LocalBackdrops.current.background,
+    ) {
     Row(
-        modifier.fillMaxSize().padding(4.dp).clip(shape).background(config.appearance.menuBackground.withOpacity(0.75f)).padding(6.dp),
+        Modifier.fillMaxSize().clip(shape).padding(6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -215,6 +231,7 @@ fun FlyerQuickPanel(modifier: Modifier) {
         QuickButton(Icons.Outlined.Palette, "Themes") { actions.openFlyer(FlyerRoute.Category(FlyerCategory.THEMES)) }
         QuickButton(Icons.Outlined.DarkMode, "Dark") { actions.perform(GestureAction(ActionType.TOGGLE_DARK_MODE)) }
         QuickButton(Icons.Outlined.DesktopWindows, "Desktop") { actions.perform(GestureAction(ActionType.TOGGLE_DESKTOP_MODE)) }
+    }
     }
 }
 

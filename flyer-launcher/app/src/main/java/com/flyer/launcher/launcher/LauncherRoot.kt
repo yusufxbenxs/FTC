@@ -76,6 +76,14 @@ import com.flyer.launcher.launcher.render.LocalAppOverrides
 import com.flyer.launcher.launcher.render.LocalDraggingIds
 import com.flyer.launcher.launcher.render.LocalLauncherCore
 import kotlinx.coroutines.delay
+import com.flyer.launcher.launcher.lock.AuthPrompt
+import com.flyer.launcher.launcher.lock.LockButton
+import com.flyer.launcher.launcher.lock.LockOverlay
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import com.flyer.launcher.launcher.render.materials.BackdropLayer
+import com.flyer.launcher.launcher.render.materials.Backdrops
+import com.flyer.launcher.launcher.render.materials.LocalBackdrops
+import com.flyer.launcher.launcher.render.materials.recordBackdrop
 
 /** Blur radius (px) the activity should apply behind its window (wallpaper) right now. */
 fun interface WindowBlurSink {
@@ -91,11 +99,15 @@ fun LauncherRoot(ui: LauncherUiState, actions: LauncherActions, platform: FlyerP
     val counts by core.persistence.launchCounts.collectAsStateWithLifecycle()
     val last by core.persistence.lastLaunched.collectAsStateWithLifecycle()
     val homeEdit by core.lastHomeEdit.collectAsStateWithLifecycle()
+    val lockState by core.lock.state.collectAsStateWithLifecycle()
     val config = doc.config
     val layout = doc.layout
     val index = remember(apps) { AppIndex(apps.associateBy { it.key }) }
     val dragging = ui.drag.session?.takeIf { it.started }?.draggedItemId?.let { setOf(it) } ?: emptySet()
     val widthDp = LocalConfiguration.current.screenWidthDp
+    val bgLayer = rememberGraphicsLayer()
+    val homeLayer = rememberGraphicsLayer()
+    val backdrops = remember(bgLayer, homeLayer) { Backdrops(BackdropLayer(bgLayer), BackdropLayer(homeLayer)) }
 
     SideEffect { ui.desktopActive = isDesktopActive(config, pointerDeviceAttached, widthDp) }
     WireDrag(ui, actions)
@@ -110,6 +122,7 @@ fun LauncherRoot(ui: LauncherUiState, actions: LauncherActions, platform: FlyerP
         LocalLauncherActions provides actions,
         LocalFlyerPlatform provides platform,
         LocalDraggingIds provides dragging,
+        LocalBackdrops provides backdrops,
     ) {
         FlyerTheme(config) {
             val traits = core.traits
@@ -124,6 +137,7 @@ fun LauncherRoot(ui: LauncherUiState, actions: LauncherActions, platform: FlyerP
                 ui.drawerOpen || ui.searchOpen -> config.drawer.blurDp
                 else -> 0
             }.coerceAtMost(cap)
+            val homeBlurDp = if (lockState.locked && blurAllowed) config.lock.blurDp.coerceAtMost(cap) else overlayBlurDp / 2
             val density = LocalDensity.current
             LaunchedEffect(overlayBlurDp) { blur.setBlurBehind(with(density) { overlayBlurDp.dp.roundToPx() }) }
 
@@ -137,23 +151,32 @@ fun LauncherRoot(ui: LauncherUiState, actions: LauncherActions, platform: FlyerP
             }
 
             val flyerState = remember { MutableTransitionState(false) }
-            flyerState.targetState = ui.flyer.isOpen
-            val flyerCovering = flyerState.currentState && flyerState.isIdle && ui.flyer.isOpen
+            // While locked, Flyer is hidden (its draft is kept) so the home screen shows behind the lock.
+            flyerState.targetState = ui.flyer.isOpen && !lockState.locked
+            val flyerCovering = flyerState.currentState && flyerState.isIdle && ui.flyer.isOpen && !lockState.locked
 
             Box(Modifier.fillMaxSize().dragMonitor(ui.drag)) {
                 if (!flyerCovering) {
-                    HomeBackground(config.home.background)
-                    Box(
-                        Modifier.fillMaxSize()
-                            .graphicsLayer {
-                                val e = entrance.value
-                                alpha = e
-                                scaleX = 0.94f + 0.06f * e
-                                scaleY = 0.94f + 0.06f * e
-                            }
-                            .let { if (overlayBlurDp > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) it.blur((overlayBlurDp / 2).dp) else it },
-                    ) {
-                        if (ui.desktopActive) DesktopScreen(ui, config, layout, apps) else HomeScreen(ui, config, layout)
+                    // Recorded so glass materials can blur and refract what is really behind them.
+                    Box(Modifier.fillMaxSize().recordBackdrop(backdrops.home)) {
+                        HomeBackground(config.home.background, Modifier.recordBackdrop(backdrops.background))
+                        Box(
+                            Modifier.fillMaxSize()
+                                .graphicsLayer {
+                                    val e = entrance.value
+                                    // Locked without blur (older Android / effects off): fade the home so the lock reads clearly.
+                                    alpha = e * if (lockState.locked && homeBlurDp == 0) 0.3f else 1f
+                                    scaleX = 0.94f + 0.06f * e
+                                    scaleY = 0.94f + 0.06f * e
+                                }
+                                .let { if (homeBlurDp > 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) it.blur(homeBlurDp.dp) else it },
+                        ) {
+                            if (ui.desktopActive) DesktopScreen(ui, config, layout, apps) else HomeScreen(ui, config, layout)
+                        }
+                    }
+
+                    if (config.lock.showButton && !lockState.locked && !ui.drawerOpen && ui.openFolder == null && !ui.searchOpen && !ui.drag.isDragging) {
+                        LockButton(ui, config.lock)
                     }
 
                     AnimatedVisibility(ui.drawerOpen, enter = enterFor(config.drawer.animation, config, animate), exit = exitFor(config.drawer.animation, config, animate)) {
@@ -185,7 +208,7 @@ fun LauncherRoot(ui: LauncherUiState, actions: LauncherActions, platform: FlyerP
                     DragLayer(ui)
                     ui.menu?.let { MenuOverlay(it) { ui.menu = null; ui.drag.cancel() } }
 
-                    homeEdit?.let { (label, _) ->
+                    homeEdit?.takeIf { !lockState.locked }?.let { (label, _) ->
                         LaunchedEffect(homeEdit) { delay(4500); core.clearHomeUndo() }
                         LauncherSnackbar(
                             label, "Undo", { core.undoHomeEdit() },
@@ -201,6 +224,9 @@ fun LauncherRoot(ui: LauncherUiState, actions: LauncherActions, platform: FlyerP
                 ) {
                     FlyerHost(ui.flyer, core, apps)
                 }
+
+                if (lockState.locked) LockOverlay(ui, lockState)
+                ui.authRequest?.let { AuthPrompt(ui, it, lockState) }
 
                 ui.message?.let { msg ->
                     LaunchedEffect(msg) { delay(2600); ui.message = null }
@@ -222,7 +248,13 @@ fun LauncherRoot(ui: LauncherUiState, actions: LauncherActions, platform: FlyerP
                 }
             }
 
-            BackHandler(enabled = true) { ui.back() }
+            BackHandler(enabled = true) {
+                when {
+                    ui.authRequest != null -> ui.authRequest = null
+                    lockState.locked -> Unit // the lock can only be left by unlocking
+                    else -> ui.back()
+                }
+            }
         }
     }
 }
@@ -273,6 +305,10 @@ private fun handleDrop(ui: LauncherUiState, actions: LauncherActions, session: D
     val appKey = (session.visual as? AppItem)?.appKey
     when (candidate.special) {
         SpecialDrop.REMOVE -> {
+            if (appKey != null && WorkspaceEngine.isProtectedKey(appKey)) {
+                actions.showMessage("Flyer apps are part of the launcher and can't be removed")
+                return
+            }
             when (val p = session.placement) {
                 is Placement.Existing -> core.editHome("Removed") { d -> d.copy(layout = WorkspaceEngine.removeItem(d.layout, p.itemId)) }
                 is Placement.FromFolder -> core.editHome("Removed from folder") { d ->

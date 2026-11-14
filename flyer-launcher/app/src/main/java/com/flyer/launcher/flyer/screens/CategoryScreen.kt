@@ -61,6 +61,7 @@ fun previewKindFor(category: FlyerCategory) = when (category) {
     FlyerCategory.DRAWER -> PreviewKind.DRAWER
     FlyerCategory.FOLDERS -> PreviewKind.FOLDER
     FlyerCategory.DESKTOP -> PreviewKind.DESKTOP
+    FlyerCategory.LOCK -> PreviewKind.LOCK
     FlyerCategory.GESTURES, FlyerCategory.PERFORMANCE, FlyerCategory.ADVANCED, FlyerCategory.BACKUP -> PreviewKind.NONE
     else -> PreviewKind.HOME
 }

@@ -18,7 +18,8 @@ import com.flyer.launcher.core.workspace.LayoutValidator
 enum class ConfigSection(val title: String) {
     HOME("Home screen"), ICONS("Icons"), DOCK("Dock"), DRAWER("App drawer"), FOLDERS("Folders"),
     WIDGETS("Widgets"), GESTURES("Gestures"), ANIMATIONS("Animations"), APPEARANCE("Appearance"),
-    TYPOGRAPHY("Typography"), DESKTOP("Desktop mode"), SEARCH("Search"), PERFORMANCE("Performance"), ADVANCED("Advanced");
+    TYPOGRAPHY("Typography"), DESKTOP("Desktop mode"), SEARCH("Search"), PERFORMANCE("Performance"), ADVANCED("Advanced"),
+    STYLE("Materials & effects"), LOCK("Lock");
 
     fun reset(c: FlyerConfig): FlyerConfig {
         val d = FlyerConfig()
@@ -37,6 +38,8 @@ enum class ConfigSection(val title: String) {
             SEARCH -> c.copy(search = d.search)
             PERFORMANCE -> c.copy(performance = d.performance)
             ADVANCED -> c.copy(advanced = d.advanced)
+            STYLE -> c.copy(style = d.style)
+            LOCK -> c.copy(lock = d.lock)
         }
     }
 

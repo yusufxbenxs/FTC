@@ -3,4 +3,5 @@
     <string name="app_name">Flyer Launcher</string>
     <string name="flyer_name">Flyer</string>
     <string name="pin_add_title">Add to home screen</string>
+    <string name="device_admin_description">Lets Flyer Launcher lock the phone when you hold the lock button. Flyer only uses the "lock screen" policy.</string>
 </resources>

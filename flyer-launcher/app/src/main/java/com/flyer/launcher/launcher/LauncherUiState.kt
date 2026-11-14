@@ -40,6 +40,10 @@ data class ConfirmRequest(
     val onConfirm: () -> Unit,
 )
 
+/** A request to unlock before doing something (open Flyer, open a protected app). */
+@Immutable
+data class AuthRequest(val title: String, val onSuccess: () -> Unit)
+
 @Immutable
 data class OpenFolder(val folderId: String, val anchor: Rect?)
 
@@ -67,6 +71,7 @@ class LauncherUiState(val core: LauncherCore) {
     var startMenuOpen by mutableStateOf(false)
     var renameFolderId by mutableStateOf<String?>(null)
     var confirm by mutableStateOf<ConfirmRequest?>(null)
+    var authRequest by mutableStateOf<AuthRequest?>(null)
     var desktopActive by mutableStateOf(false)
     var resumed by mutableStateOf(true)
 
@@ -83,6 +88,14 @@ class LauncherUiState(val core: LauncherCore) {
     var reconfigureWidget: ((Int) -> Unit)? = null
     var openWallpaperPicker: (() -> Unit)? = null
     var restoreWidget: ((com.flyer.launcher.core.model.WidgetItem) -> Unit)? = null
+
+    // Lock hooks (implemented by the activity, which owns the system prompts).
+    var lockLauncher: (() -> Unit)? = null
+    var lockPhone: (() -> Unit)? = null
+    var canLockPhone: (() -> Boolean)? = null
+    var unlockWithPhoneOrTap: ((com.flyer.launcher.core.config.UnlockMethod) -> Unit)? = null
+    var finishUnlock: (() -> Unit)? = null
+    var requestPhoneCredential: ((String, (Boolean) -> Unit) -> Unit)? = null
 
     val anyOverlayOpen: Boolean
         get() = drawerOpen || searchOpen || openFolder != null || menu != null || widgetPicker != null ||

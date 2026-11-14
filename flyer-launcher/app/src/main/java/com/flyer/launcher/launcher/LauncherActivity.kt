@@ -1,6 +1,11 @@
 package com.flyer.launcher.launcher
 
+import android.app.KeyguardManager
 import android.app.role.RoleManager
+import android.hardware.biometrics.BiometricManager
+import android.hardware.biometrics.BiometricPrompt
+import android.os.CancellationSignal
+import com.flyer.launcher.core.config.UnlockMethod
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -81,6 +86,11 @@ class LauncherActivity : ComponentActivity(), FlyerPlatform, LauncherActions {
     private val createDoc = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { onCreateDoc?.invoke(it); onCreateDoc = null }
     private val openDoc = registerForActivityResult(ActivityResultContracts.OpenDocument()) { onOpenDoc?.invoke(it); onOpenDoc = null }
     private val roleRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    private var onCredential: ((Boolean) -> Unit)? = null
+    private val confirmCredential = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        onCredential?.invoke(r.resultCode == RESULT_OK)
+        onCredential = null
+    }
     private val bindWidget = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val pending = pendingWidget ?: return@registerForActivityResult
         if (result.resultCode == RESULT_OK) configureOrFinish(pending) else cancelPendingWidget()
@@ -104,6 +114,15 @@ class LauncherActivity : ComponentActivity(), FlyerPlatform, LauncherActions {
         ui.reconfigureWidget = { id -> core.widgets.startConfigure(this, id, REQUEST_RECONFIGURE) }
         ui.openWallpaperPicker = { openWallpaperPicker() }
         ui.restoreWidget = { item -> restoreWidget(item) }
+        ui.lockLauncher = { lockLauncherNow() }
+        ui.lockPhone = { lockPhoneNow() }
+        ui.canLockPhone = { core.lock.canLockDevice() }
+        ui.finishUnlock = { lifecycleScope.launch { core.lock.unlock() } }
+        ui.requestPhoneCredential = { title, onResult -> requestPhoneCredential(title, onResult) }
+        ui.unlockWithPhoneOrTap = { method ->
+            if (method == UnlockMethod.TAP) ui.finishUnlock?.invoke()
+            else requestPhoneCredential("Unlock Flyer Launcher") { ok -> if (ok) ui.finishUnlock?.invoke() }
+        }
 
         getSystemService(InputManager::class.java)?.registerInputDeviceListener(inputListener, null)
         refreshPointerDevices()
@@ -164,6 +183,7 @@ class LauncherActivity : ComponentActivity(), FlyerPlatform, LauncherActions {
     private fun handleIntent(intent: Intent?, fromNewIntent: Boolean) {
         if (intent == null || !fromNewIntent) return
         if (intent.action != Intent.ACTION_MAIN || !intent.hasCategory(Intent.CATEGORY_HOME)) return
+        if (core.lock.state.value.locked) return // the home button can't get past the launcher lock
         val alreadyOnHome = hasFocus && (intent.flags and Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT) != Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT
         val config = core.config.value
         if (!alreadyOnHome) {
@@ -239,8 +259,10 @@ class LauncherActivity : ComponentActivity(), FlyerPlatform, LauncherActions {
 
     // ───────────── Keyboard shortcuts ─────────────
 
+    // Lint wrongly flags this public Activity override as restricted (androidx ComponentActivity hides it).
+    @android.annotation.SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && core.config.value.desktop.keyboardShortcuts && handleShortcut(event)) return true
+        if (!core.lock.state.value.locked && event.action == KeyEvent.ACTION_DOWN && core.config.value.desktop.keyboardShortcuts && handleShortcut(event)) return true
         return super.dispatchKeyEvent(event)
     }
 
@@ -253,6 +275,7 @@ class LauncherActivity : ComponentActivity(), FlyerPlatform, LauncherActions {
             ctrl && e.keyCode == KeyEvent.KEYCODE_F -> { openSearch(); return true }
             ctrl && e.keyCode == KeyEvent.KEYCODE_COMMA -> { openFlyer(FlyerRoute.Dashboard); return true }
             ctrl && e.keyCode == KeyEvent.KEYCODE_E -> { openFlyer(FlyerRoute.LiveEditor()); return true }
+            ctrl && e.keyCode == KeyEvent.KEYCODE_L -> { lockLauncherNow(); return true }
             ctrl && e.keyCode == KeyEvent.KEYCODE_A && !ui.flyer.isOpen -> { if (ui.desktopActive) ui.startMenuOpen = true else ui.drawerOpen = true; return true }
             ctrl && e.keyCode == KeyEvent.KEYCODE_Z && !e.isShiftPressed -> { if (session != null) session.undo() else core.undoHomeEdit(); return true }
             ctrl && (e.keyCode == KeyEvent.KEYCODE_Y || (e.keyCode == KeyEvent.KEYCODE_Z && e.isShiftPressed)) -> { session?.redo(); return session != null }
@@ -270,6 +293,12 @@ class LauncherActivity : ComponentActivity(), FlyerPlatform, LauncherActions {
     // ───────────── LauncherActions ─────────────
 
     override fun launchApp(key: String, bounds: Rect?) {
+        val lock = core.config.value.lock
+        if (key in lock.protectedApps && needsAuth()) {
+            val label = core.resolveApp(key)?.label ?: "this app"
+            ui.authRequest = AuthRequest("Unlock to open $label") { core.lock.markAuthorized(); launchApp(key, bounds) }
+            return
+        }
         val entry = core.resolveApp(key) ?: run { showMessage("App not found"); return }
         entry.builtIn?.let { builtIn ->
             core.recordLaunch(key)
@@ -323,6 +352,10 @@ class LauncherActivity : ComponentActivity(), FlyerPlatform, LauncherActions {
     }
 
     override fun openFlyer(route: FlyerRoute) {
+        if (core.config.value.lock.protectFlyer && !ui.flyer.isOpen && needsAuth()) {
+            ui.authRequest = AuthRequest("Unlock to open Flyer") { core.lock.markAuthorized(); openFlyer(route) }
+            return
+        }
         ui.menu = null
         ui.drawerOpen = false
         ui.openFolder = null
@@ -365,13 +398,85 @@ class LauncherActivity : ComponentActivity(), FlyerPlatform, LauncherActions {
             ActionType.DEFAULT_PAGE -> ui.pageController?.goTo(config.home.defaultPage)
             ActionType.NEXT_PAGE -> ui.pageController?.let { it.goTo(it.currentPage + 1) }
             ActionType.PREVIOUS_PAGE -> ui.pageController?.let { it.goTo(it.currentPage - 1) }
-            ActionType.EXPAND_NOTIFICATIONS, ActionType.QUICK_SETTINGS, ActionType.LOCK_SCREEN,
+            ActionType.LOCK_SCREEN -> lockPhoneNow()
+            ActionType.LOCK_LAUNCHER -> lockLauncherNow()
+            ActionType.EXPAND_NOTIFICATIONS, ActionType.QUICK_SETTINGS,
             ActionType.RECENT_APPS, ActionType.SCREENSHOT,
             -> core.gestures.performSystemAction(action.type).onFailure { e ->
                 showMessage(if (e is AccessibilityRequired) "Enable the gesture helper in Flyer › Gestures to use this" else e.message ?: "Not supported on this device")
             }
         }
     }
+
+    // ───────────── Lock ─────────────
+
+    /** True when opening something protected needs an unlock right now. */
+    private fun needsAuth(): Boolean {
+        val method = com.flyer.launcher.launcher.lock.effectiveMethod(core.config.value.lock, core.lock.state.value)
+        return method != UnlockMethod.TAP && !core.lock.recentlyAuthorized()
+    }
+
+    private fun lockLauncherNow() {
+        ui.closeAll(includeFlyer = false)
+        ui.drag.cancel()
+        ui.authRequest = null
+        lifecycleScope.launch { core.lock.lock() }
+    }
+
+    private fun lockPhoneNow() {
+        core.lock.lockDevice()
+            .onSuccess { if (core.config.value.lock.alsoLockLauncherWithPhone) lockLauncherNow() }
+            .onFailure {
+                showMessage("Allow Flyer Launcher to lock the phone")
+                runCatching { startActivity(core.lock.adminActivationIntent()) }
+            }
+    }
+
+    /** Verifies the phone's own screen lock (fingerprint/face/PIN/pattern/password). */
+    override fun requestPhoneCredential(title: String, onResult: (Boolean) -> Unit) {
+        val km = getSystemService(KeyguardManager::class.java)
+        if (km == null || !km.isDeviceSecure) {
+            // The phone has no screen lock, so there is nothing to verify.
+            onResult(true)
+            return
+        }
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                val callback = biometricCallback(onResult)
+                val authenticators = if (core.config.value.lock.allowBiometrics) {
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                } else BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                BiometricPrompt.Builder(this).setTitle(title).setAllowedAuthenticators(authenticators).build()
+                    .authenticate(CancellationSignal(), mainExecutor, callback)
+            }
+            Build.VERSION.SDK_INT == Build.VERSION_CODES.Q -> {
+                val callback = biometricCallback(onResult)
+                @Suppress("DEPRECATION")
+                BiometricPrompt.Builder(this).setTitle(title).setDeviceCredentialAllowed(true).build()
+                    .authenticate(CancellationSignal(), mainExecutor, callback)
+            }
+            else -> {
+                @Suppress("DEPRECATION")
+                val intent = km.createConfirmDeviceCredentialIntent(title, null)
+                if (intent == null) onResult(true) else {
+                    onCredential = onResult
+                    confirmCredential.launch(intent)
+                }
+            }
+        }
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.P)
+    private fun biometricCallback(onResult: (Boolean) -> Unit) = object : BiometricPrompt.AuthenticationCallback() {
+        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) = onResult(true)
+        override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) = onResult(false)
+    }
+
+    override fun requestDeviceAdmin() {
+        runCatching { startActivity(core.lock.adminActivationIntent()) }
+    }
+
+    override fun lockLauncher() = lockLauncherNow()
 
     // ───────────── FlyerPlatform ─────────────
 

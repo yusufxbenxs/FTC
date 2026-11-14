@@ -31,6 +31,8 @@ data class FlyerConfig(
     val search: SearchConfig = SearchConfig(),
     val performance: PerformanceConfig = PerformanceConfig(),
     val advanced: AdvancedConfig = AdvancedConfig(),
+    val style: StyleConfig = StyleConfig(),
+    val lock: LockConfig = LockConfig(),
 ) {
     companion object {
         const val CURRENT_SCHEMA_VERSION = 1
@@ -44,7 +46,14 @@ data class FlyerConfig(
 @Serializable enum class PageIndicatorStyle { DOTS, LINE, NUMBERS, NONE }
 @Serializable enum class VerticalPlacement { TOP, CENTER, BOTTOM }
 @Serializable enum class CellSizing { FILL, FIXED }
-@Serializable enum class BackgroundType { SYSTEM_WALLPAPER, SOLID, GRADIENT, IMAGE }
+@Serializable enum class BackgroundType {
+    SYSTEM_WALLPAPER, SOLID, GRADIENT, IMAGE,
+    /** Launcher-drawn animated backgrounds (see core/render/AnimatedBackgrounds.kt). */
+    AURORA, LIQUID, PARTICLES, WAVES, MESH;
+
+    val animated: Boolean get() = this == AURORA || this == LIQUID || this == PARTICLES || this == WAVES
+    val launcherDrawn: Boolean get() = this != SYSTEM_WALLPAPER
+}
 @Serializable enum class SystemBarStyle { AUTO, LIGHT_ICONS, DARK_ICONS }
 
 @Immutable
@@ -61,6 +70,11 @@ data class BackgroundConfig(
     val dim: Float = 0f,
     /** Parallax: report page offsets to the system wallpaper so it scrolls with the pages. */
     val wallpaperScrolling: Boolean = true,
+    /** Palette for aurora / liquid / particles / waves / mesh backgrounds. */
+    val palette: List<ColorValue> = listOf(argb(0xFF6A5BFF), argb(0xFF1FB6FF), argb(0xFFFF7AD9), argb(0xFF14142B)),
+    val animSpeed: Float = 1f,
+    /** Amount of blobs / particles / waves (0..1). */
+    val animDensity: Float = 0.5f,
 )
 
 @Immutable
@@ -279,7 +293,7 @@ enum class GestureType {
 enum class ActionType {
     NONE, OPEN_DRAWER, OPEN_SEARCH, OPEN_FLYER, OPEN_LIVE_EDITOR, HOME_MENU,
     EXPAND_NOTIFICATIONS, QUICK_SETTINGS, LOCK_SCREEN, RECENT_APPS, SCREENSHOT,
-    LAUNCH_APP, TOGGLE_DESKTOP_MODE, TOGGLE_DARK_MODE, DEFAULT_PAGE, NEXT_PAGE, PREVIOUS_PAGE, OPEN_WIDGETS,
+    LAUNCH_APP, TOGGLE_DESKTOP_MODE, TOGGLE_DARK_MODE, DEFAULT_PAGE, NEXT_PAGE, PREVIOUS_PAGE, OPEN_WIDGETS, LOCK_LAUNCHER,
 }
 
 @Immutable
@@ -429,6 +443,8 @@ data class PerformanceConfig(
     val prefetchIcons: Boolean = true,
     val lowMemoryMode: Boolean = false,
     val keepWidgetsListening: Boolean = false,
+    /** Frame-rate cap for animated backgrounds and animated materials. */
+    val effectsFps: Int = 30,
 )
 
 // ───────────────────────────── Advanced ─────────────────────────────
@@ -447,4 +463,90 @@ data class AdvancedConfig(
     val showHiddenAppsInSearch: Boolean = false,
     val addNewAppsToHome: Boolean = false,
     val undoHistorySize: Int = 100,
+)
+
+// ───────────────────────────── Materials & effects (advanced themes) ─────────────────────────────
+
+@Serializable
+enum class SurfaceMaterial {
+    FLAT, FROSTED, LIQUID_GLASS, HOLOGRAPHIC, NEUMORPHIC, CLAY, NEON, OUTLINE;
+
+    /** Materials that show (blurred / refracted) content from behind the surface. */
+    val usesBackdrop: Boolean get() = this == FROSTED || this == LIQUID_GLASS || this == HOLOGRAPHIC
+}
+
+@Immutable
+@Serializable
+data class StyleConfig(
+    val material: SurfaceMaterial = SurfaceMaterial.FLAT,
+    val applyToDock: Boolean = true,
+    val applyToFolders: Boolean = true,
+    val applyToDrawer: Boolean = true,
+    val applyToMenus: Boolean = true,
+    val applyToSearch: Boolean = true,
+    val applyToWidgets: Boolean = false,
+    val applyToTaskbar: Boolean = true,
+    val applyToLock: Boolean = true,
+    /** Backdrop blur used by frosted / glass materials. */
+    val frostDp: Int = 18,
+    /** Liquid glass: how strongly the edges bend what is behind (0..1, Android 13+). */
+    val refraction: Float = 0.6f,
+    /** Liquid glass: width of the curved edge, in dp. */
+    val thicknessDp: Int = 16,
+    /** Liquid glass: colour fringing at the edges (0..1, Android 13+). */
+    val chromatic: Float = 0.3f,
+    /** Specular rim highlight strength (0..1). */
+    val highlight: Float = 0.7f,
+    /** Direction the light comes from, in degrees (0 = from the right, 90 = from below). */
+    val lightAngle: Int = 225,
+    /** Glass/frosted tint strength on top of the component's own color (0..1). */
+    val tintStrength: Float = 0.35f,
+    /** Film grain on frosted surfaces (0..1). */
+    val grain: Float = 0.25f,
+    val glowColor: ColorValue = argb(0xFFFF2BD6),
+    val glowRadiusDp: Int = 12,
+    val glowPulse: Boolean = true,
+    /** Neumorphic / clay shadow depth (0..1). */
+    val depth: Float = 0.6f,
+    /** Holographic sheen animation speed. */
+    val holoSpeed: Float = 1f,
+    /** Put every icon on a small glass/material plate. */
+    val iconPlates: Boolean = false,
+    /** "Clear" icons: desaturated, brightened glyphs (pairs well with glass plates). */
+    val clearIcons: Boolean = false,
+)
+
+// ───────────────────────────── Lock ─────────────────────────────
+
+@Serializable enum class LockCorner { TOP_START, TOP_END, BOTTOM_START, BOTTOM_END }
+@Serializable enum class UnlockMethod { PHONE, LAUNCHER_PIN, LAUNCHER_PASSWORD, TAP }
+@Serializable enum class LockIcon { PADLOCK, SHIELD, MOON, KEY }
+
+@Immutable
+@Serializable
+data class LockConfig(
+    val showButton: Boolean = false,
+    val corner: LockCorner = LockCorner.TOP_END,
+    val buttonSizeDp: Int = 44,
+    val buttonMarginDp: Int = 12,
+    val buttonOpacity: Float = 0.9f,
+    val icon: LockIcon = LockIcon.PADLOCK,
+    val holdToLockPhone: Boolean = true,
+    val holdDurationMs: Int = 1200,
+    val alsoLockLauncherWithPhone: Boolean = false,
+    val unlockMethod: UnlockMethod = UnlockMethod.PHONE,
+    val allowBiometrics: Boolean = true,
+    val lockOnScreenOff: Boolean = false,
+    val protectFlyer: Boolean = false,
+    /** Apps that need the launcher unlock before they open from the launcher. */
+    val protectedApps: Set<String> = emptySet(),
+    val showClock: Boolean = true,
+    val showDate: Boolean = true,
+    val showBattery: Boolean = true,
+    val showNextAlarm: Boolean = true,
+    val awayMessage: String = "",
+    val clockSizeSp: Float = 80f,
+    val blurDp: Int = 28,
+    val dim: Float = 0.35f,
+    val maxAttempts: Int = 5,
 )

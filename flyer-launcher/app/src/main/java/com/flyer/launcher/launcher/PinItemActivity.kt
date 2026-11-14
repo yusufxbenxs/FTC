@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -52,12 +53,18 @@ class PinItemActivity : ComponentActivity() {
             return
         }
         val core = FlyerApp.core(this)
+        if (core.lock.state.value.locked) {
+            android.widget.Toast.makeText(this, "Flyer Launcher is locked", android.widget.Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
         val isShortcut = request.requestType == LauncherApps.PinItemRequest.REQUEST_TYPE_SHORTCUT
         val title = if (isShortcut) request.shortcutInfo?.shortLabel?.toString() ?: "Shortcut"
         else request.getAppWidgetProviderInfo(this)?.loadLabel(packageManager) ?: "Widget"
 
         setContent {
-            FlyerTheme(core.config.value) {
+            val config by core.config.collectAsState()
+            FlyerTheme(config) {
                 val icon by produceState<ImageBitmap?>(null) {
                     value = withContext(Dispatchers.IO) {
                         val density = resources.displayMetrics.densityDpi
