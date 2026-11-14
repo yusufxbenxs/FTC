@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Launcher document (config + layout), saved snapshots/themes and imported images/fonts. -->
+    <include domain="file" path="datastore/" />
+    <include domain="file" path="snapshots/" />
+    <include domain="file" path="media/" />
+</full-backup-content>

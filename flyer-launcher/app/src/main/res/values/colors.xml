@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="flyer_brand">#FF5B5BF7</color>
+    <color name="flyer_brand_dark">#FF2D2DB8</color>
+    <color name="flyer_icon_bg">#FF14142B</color>
+</resources>
